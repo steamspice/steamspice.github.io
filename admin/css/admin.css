@@ -580,3 +580,13 @@ svg:where(:not([width])) { inline-size: var(--icon); block-size: var(--icon); }
   .card-3d[open] { animation: card-3d-in 0.32s var(--ease-out, ease-out) both; transform-origin: 50% 100%; }
   @keyframes card-3d-in { from { opacity: 0; transform: perspective(40rem) translateY(1.5rem) rotateX(18deg) scale(0.94); } to { opacity: 1; transform: perspective(40rem) translateY(0) rotateX(0) scale(1); } }
 }
+
+/* Step 4q: the "Didn't go through?" strip and the message choices */
+.return-strip { display: grid; gap: var(--space-2xs); margin-block-start: var(--space-xs); padding: var(--space-xs) var(--space-s); background: var(--green-tint); border-inline-start: var(--space-3xs) solid var(--emerald); border-radius: var(--r-input); }
+.return-strip p { margin: 0; font-weight: 600; color: var(--charcoal); }
+.message-choices { flex-wrap: wrap; }
+
+/* Step 4q: pre-orders */
+.tag-preorder { background: var(--peach); color: var(--charcoal); }
+.preorder-box { display: grid; gap: var(--space-2xs); margin-block: var(--space-xs); padding: var(--space-xs) var(--space-s); background: var(--green-tint); border-radius: var(--r-input); }
+.preorder-box[hidden] { display: none; }

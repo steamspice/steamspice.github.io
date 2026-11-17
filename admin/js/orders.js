@@ -4,7 +4,8 @@ import { FILTER_KEY, ORDERS_REFRESH_SECONDS, SEEN_KEY, TOAST_SECONDS, STATUS_LAB
 import { formatPrice } from '../../js/cart.js';
 import { ukToday } from '../../js/mock-backend.js';
 import { addDays, endOfWeek, shortDate } from './dates.js';
-import { buildLink, describeItems, fillTemplate, toWhatsAppNumber } from '../../js/whatsapp.js';
+import { buildAppLink, describeItems, fillTemplate, toWhatsAppNumber } from '../../js/whatsapp.js';
+import { isMobile, messageChoices } from './message-panel.js';
 import { ordersToCsv } from '../../js/admin-rules.js';
 import { notifyNewOrder, playSoftSound, soundOn } from './alerts.js';
 import { toast } from './dom.js';
@@ -65,26 +66,39 @@ function messageText(order, status) {
   });
 }
 
+// The order's Message button: the message (editable), then WhatsApp, text message or copy.
 function messageBox(order, card) {
   busy = true;
   const phone = toWhatsAppNumber(order.customer_phone);
   const box = el('div', { className: 'message-box' });
   const close = el('button', { type: 'button', className: 'btn btn-secondary btn-small', onclick: () => { box.remove(); busy = false; } }, 'Close');
-  if (!phone) {
-    box.append(el('p', { className: 'error' }, 'This phone number does not look valid, so WhatsApp cannot be opened. Check the number the customer gave.'), close);
-    card.append(box);
-    return;
-  }
+  if (!phone) box.append(el('p', { className: 'error' }, 'This phone number does not look valid, so WhatsApp and text messages cannot be opened. You can still copy the message. Check the number the customer gave.'));
   if (!settings.pickup_address_text) box.append(el('p', { className: 'error', role: 'alert' }, 'Add your pickup address in Settings. ', el('a', { href: 'settings?from=orders#pickup' }, 'Open Settings')));
   const area = el('textarea', { rows: 8, value: messageText(order, order.status), 'aria-label': 'Message to send' });
   area.id = `msg-${order.id}`;
-  const send = el('a', { className: 'btn btn-small', target: '_blank', rel: 'noopener noreferrer' }, 'Open WhatsApp');
-  const sync = () => { send.href = buildLink(phone, area.value); };
-  area.addEventListener('input', sync); sync();
-  box.append(el('label', { htmlFor: area.id }, 'Edit the message if you like'), area, el('p', { className: 'hint' }, 'You tap send in WhatsApp.'), el('div', { className: 'btn-row' }, send, close));
+  box.append(el('label', { htmlFor: area.id }, 'Edit the message if you like'), area, el('p', { className: 'hint' }, 'You tap send in the app.'),
+    messageChoices({ digits: phone, getText: () => area.value, onUsed: () => { /* the box stays so she can try another way */ } }), el('div', { className: 'btn-row' }, close));
   card.append(box);
   area.focus();
 }
+
+// After a status change WhatsApp opens. When she comes back the order shows "Didn't go through?" with the other ways to send the same message.
+const PENDING_KEY = 'ss-msg-pending';
+const readPending = () => { try { return JSON.parse(sessionStorage.getItem(PENDING_KEY) || 'null'); } catch { return null; } };
+const writePending = (v) => { try { if (v) sessionStorage.setItem(PENDING_KEY, JSON.stringify(v)); else sessionStorage.removeItem(PENDING_KEY); } catch { /* not remembered */ } };
+function returnStrip(order) {
+  const pending = readPending();
+  if (!pending || pending.id !== order.id) return null;
+  const phone = toWhatsAppNumber(order.customer_phone);
+  const done = () => { writePending(null); strip.remove(); };
+  const strip = el('div', { className: 'return-strip', role: 'status' },
+    el('p', {}, `Message to ${order.customer_name || 'the customer'} opened. Didn't go through?`),
+    messageChoices({ digits: phone, getText: () => messageText(order, pending.status), withWhatsApp: !isMobile(), onUsed: done }),
+    el('div', { className: 'btn-row' }, el('button', { type: 'button', className: 'btn btn-small', onclick: done }, 'Done')));
+  return strip;
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && readPending()) refresh(); });
+window.addEventListener('pageshow', () => { if (readPending()) refresh(); });
 
 document.addEventListener('click', (e) => { document.querySelectorAll('.more[open]').forEach((m) => { if (!m.contains(e.target)) m.open = false; }); });
 
@@ -100,17 +114,14 @@ function confirmCancel(order, card, showError) {
   no.focus();
 }
 
-// Saves the status first. With { message: true } WhatsApp then opens with the matching message for that customer (D-056).
-// The blank window is opened inside the tap, because browsers only allow a new window straight from a tap; it is pointed at
-// WhatsApp once the status is saved. If the browser blocks it, the message box opens on the order instead.
+// Saves the status first. With { message: true } the matching message is then offered (D-056, D-071). No blank window is ever opened: on a phone this
+// tab goes straight to the WhatsApp app (so nothing is left behind in the browser); on a computer the order shows the strip with an Open
+// WhatsApp button, a real click. Either way the strip stays on the order until she is done, with a text message and copy as fallbacks.
 async function changeStatus(order, status, showError, { message = false } = {}) {
   const phone = toWhatsAppNumber(order.customer_phone);
-  let win = null;
-  if (message && phone) { try { win = window.open('', '_blank'); } catch { win = null; } }
   try {
     await api.setOrderStatus(order.id, status);
   } catch (err) {
-    if (win) win.close();
     busy = false;
     showError(err.message);
     return;
@@ -118,15 +129,13 @@ async function changeStatus(order, status, showError, { message = false } = {}) 
   busy = false;
   markSeen(order.id);
   const updated = { ...order, status };
-  if (message && phone) {
-    const link = buildLink(phone, messageText(updated, status));
-    if (win) win.location.href = link;
+  if (message) {
+    writePending({ id: order.id, status });
+    if (!phone) toast(`${order.order_number} is ${STATUS_LABELS[status].toLowerCase()}. The phone number is not valid, so WhatsApp was not opened. You can copy the message.`, { seconds: 8 });
     if (!settings.pickup_address_text && /\{address\}/.test(settings[`wa_template_${TEMPLATE_BY_STATUS[status]}`] || '')) toast('Add your pickup address in Settings so your messages include it.', { href: 'settings?from=orders#pickup' });
-  } else if (message && !phone) {
-    toast(`${order.order_number} is ${STATUS_LABELS[status].toLowerCase()}. The phone number is not valid, so WhatsApp was not opened.`);
   }
   await refresh();
-  if (message && phone && !win) { const a = root.querySelector(`[data-id="${order.id}"]`); if (a) { busy = true; messageBox(updated, a); } }
+  if (message && phone && isMobile()) location.assign(buildAppLink(phone, messageText(updated, status)));
 }
 
 function card(order) {
@@ -139,15 +148,16 @@ function card(order) {
   const showError = (m) => { err.textContent = m; };
   const phone = toWhatsAppNumber(order.customer_phone);
   const customised = order.items.some((l) => l.customised);
+  const preorderReady = order.items.filter((l) => l.is_preorder).map((l) => l.ready_from).sort().pop() || null;
 
   const badge = el('span', { className: 'status-badge' }, STATUS_LABELS[order.status]);
   badge.dataset.status = order.status;
   article.append(
     el('div', { className: 'order-top' }, el('span', { className: 'order-number' }, order.order_number),
       order.source === 'manual' ? el('span', { className: 'tag tag-manual' }, 'Manual') : null, badge),
-    el('p', { className: 'pickup-line' }, whenShort(order), customised ? el('span', { className: 'tag tag-custom' }, 'Customised') : null),
+    el('p', { className: 'pickup-line' }, whenShort(order), customised ? el('span', { className: 'tag tag-custom' }, 'Customised') : null, preorderReady ? el('span', { className: 'tag tag-preorder' }, `PRE-ORDER, ready from ${shortDate(preorderReady)}`) : null),
     el('p', { className: 'order-who' }, el('span', { className: 'person-icon', 'aria-hidden': 'true' }), el('strong', {}, order.customer_name || 'No name'), order.customer_phone ? el('a', { href: `tel:${order.customer_phone.replace(/[^\d+]/g, '')}` }, order.customer_phone) : null),
-    el('ul', { className: 'order-lines' }, ...order.items.map((l) => el('li', {}, `${l.qty} × ${l.name}`, l.options.length ? el('span', { className: 'opts' }, l.options.map((o) => o.label).join(', ')) : null))),
+    el('ul', { className: 'order-lines' }, ...order.items.map((l) => el('li', {}, `${l.qty} × ${l.name}`, l.is_preorder ? el('span', { className: 'opts' }, `Pre-order, ready from ${shortDate(l.ready_from)}`) : null, l.options.length ? el('span', { className: 'opts' }, l.options.map((o) => o.label).join(', ')) : null))),
   );
   if (order.notes) article.append(el('p', { className: 'order-notes' }, `Note: ${order.notes}`));
 
@@ -172,6 +182,8 @@ function card(order) {
 
   article.append(el('p', { className: 'order-total' }, formatPrice(order.total_pence)), el('div', { className: 'order-actions order-actions-row' }, ...actions.childNodes));
   if (!phone) article.append(el('p', { className: 'hint error' }, order.customer_phone ? 'The phone number is not valid, so WhatsApp messages are switched off.' : 'There is no phone number, so WhatsApp messages are switched off.'));
+  const strip = returnStrip(order);
+  if (strip) article.append(strip);
   article.append(err);
   article.addEventListener('click', () => { if (fresh) open(); }, { once: true });
   return article;

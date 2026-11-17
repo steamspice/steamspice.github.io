@@ -156,9 +156,9 @@ async function drawPreview() {
   const today = ukToday();
   const last = addDays(today, PREVIEW_DAYS - 1);
   const full = new Set(await api.fullDates(today, last));
-  const config = { settings: { min_lead_hours: settings.min_lead_hours ?? 24, max_days_ahead: settings.max_days_ahead ?? 14 }, rules: state.rules, exceptions: state.exceptions };
+  const config = { settings: { min_lead_hours: settings.min_lead_hours ?? 1, max_days_ahead: settings.max_days_ahead ?? 14 }, rules: state.rules, exceptions: state.exceptions };
   const offered = new Map(getPickupOptions(config, new Date()).map((o) => [o.date, o]));
-  previewBox.replaceChildren(el('h2', {}, 'What customers will see'), el('p', { className: 'muted' }, `The next ${PREVIEW_DAYS} days, with your notice period (${settings.min_lead_hours ?? 24} hours) applied.`));
+  previewBox.replaceChildren(el('h2', {}, 'What customers will see'), el('p', { className: 'muted' }, `The next ${PREVIEW_DAYS} days, with your notice period (${settings.min_lead_hours ?? 1} hours) applied.`));
   const list = el('ul', { className: 'preview-days' });
   for (let i = 0; i < PREVIEW_DAYS; i++) {
     const date = addDays(today, i);

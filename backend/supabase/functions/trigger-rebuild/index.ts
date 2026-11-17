@@ -1,6 +1,6 @@
 // trigger-rebuild: the admin's Publish button. Only a signed-in admin can call it. It marks the site as Publishing and asks
 // GitHub to run the deploy workflow. Secrets: GITHUB_DISPATCH_TOKEN (fine-grained, this repository only, Actions: read and write),
-// ALLOWED_ORIGINS, GITHUB_REPO (optional, default sarojaryal071-sudo/momo), GITHUB_WORKFLOW (optional, default deploy.yml).
+// ALLOWED_ORIGINS, GITHUB_REPO (optional, default steamspice/steamspice.github.io), GITHUB_WORKFLOW (optional, default deploy.yml).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { allowedOrigin } from '../_shared/validate.ts';
 
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
   const token = Deno.env.get('GITHUB_DISPATCH_TOKEN');
   if (!token) return reply(503, { message: 'Publishing is not set up yet.' });
   await db.rpc('set_site_status', { p_state: 'publishing', p_detail: null });
-  const repo = Deno.env.get('GITHUB_REPO') ?? 'sarojaryal071-sudo/momo';
+  const repo = Deno.env.get('GITHUB_REPO') ?? 'steamspice/steamspice.github.io';
   const workflow = Deno.env.get('GITHUB_WORKFLOW') ?? 'deploy.yml';
   const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`, {
     method: 'POST',

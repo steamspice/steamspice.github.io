@@ -3,9 +3,10 @@
 import './main.js';
 import { buildLines, formatPrice, getCart, updateHeaderCount } from './cart.js';
 import { updateCheckoutBar } from './checkout-bar.js';
-import { loadPickup, loadRuntimeStock } from './data.js';
+import { loadPickup, loadRuntimePreorder, loadRuntimeStock } from './data.js';
 import { usedKeyboard } from './input-mode.js';
 import { earliestPickup, noticeText } from './pickup.js';
+import { preorderLabel, ukTodayIso } from './preorder.js';
 import { siteConfig } from './site-config.js';
 
 const { maxQtyPerItem: MAX_QTY } = siteConfig.limits;
@@ -25,7 +26,12 @@ const cardInfo = (card) => ({
   price: Number(card.dataset.pricePence),
   stock: card.dataset.stock === undefined ? null : Number(card.dataset.stock),
   hasOptions: card.dataset.hasOptions === 'true',
+  preReady: card.dataset.preorderReady || null,
+  preLimit: card.dataset.preorderLimit ? Number(card.dataset.preorderLimit) : null,
 });
+// Pre-order (D-071): stock 0, the switch on, ready date not passed. Then the card says so and the quantity is capped by the limit, not by stock.
+const isPre = (info) => info.stock === 0 && Boolean(info.preReady) && info.preReady >= ukTodayIso();
+const capOf = (info) => (isPre(info) ? Math.min(MAX_QTY, info.preLimit ?? MAX_QTY) : Math.min(info.stock ?? MAX_QTY, MAX_QTY));
 const clampQty = (v, max) => Math.min(max, Math.max(1, Math.floor(Number(v)) || 1));
 
 function announce(card, text) {
@@ -42,7 +48,8 @@ function refreshBars() {
 }
 
 // ---- Card action: "Add", or a compact stepper once a plain item (no choices) is in the cart ----
-function stepperFor(card, { slug, name, stock }, qty) {
+function stepperFor(card, info, qty) {
+  const { name } = info;
   const wrap = el('div', 'stepper');
   wrap.setAttribute('role', 'group');
   wrap.setAttribute('aria-label', `Quantity of ${name}`);
@@ -56,7 +63,7 @@ function stepperFor(card, { slug, name, stock }, qty) {
   plus.type = 'button';
   plus.setAttribute('aria-label', `Increase quantity of ${name}`);
   plus.dataset.qtyPlus = '';
-  plus.disabled = qty >= Math.min(stock ?? MAX_QTY, MAX_QTY);
+  plus.disabled = qty >= capOf(info);
   wrap.append(minus, count, plus);
   return wrap;
 }
@@ -65,6 +72,8 @@ function renderCardAction(card) {
   const action = card.querySelector('[data-card-action]');
   if (!action) return;
   const info = cardInfo(card);
+  const line = action.querySelector('[data-preorder-line]');
+  if (line) { line.hidden = !isPre(info); if (isPre(info)) line.textContent = preorderLabel(info.preReady); }
   const current = action.firstElementChild;
   const qty = info.hasOptions ? 0 : cart.qtyOf(info.slug);
   if (qty > 0) {
@@ -74,13 +83,13 @@ function renderCardAction(card) {
       if (hadFocus) action.querySelector('[data-qty-plus]').focus();
     } else {
       current.querySelector('output').textContent = String(qty);
-      current.querySelector('[data-qty-plus]').disabled = qty >= Math.min(info.stock ?? MAX_QTY, MAX_QTY);
+      current.querySelector('[data-qty-plus]').disabled = qty >= capOf(info);
     }
   } else if (current.matches('[data-card-stepper]')) {
     const btn = el('button', 'btn btn-add');
     btn.type = 'button';
     btn.dataset.addToCart = '';
-    btn.append('Add to cart', Object.assign(el('span', 'visually-hidden'), { textContent: `: ${info.name}` }));
+    btn.append(isPre(info) ? 'Pre-order' : 'Add to cart', Object.assign(el('span', 'visually-hidden'), { textContent: `: ${info.name}` }));
     const hadFocus = action.contains(document.activeElement);
     current.replaceWith(btn);
     if (hadFocus) btn.focus();
@@ -89,8 +98,8 @@ function renderCardAction(card) {
 
 function plainAdd(card) {
   const info = cardInfo(card);
-  const room = Math.min(info.stock ?? MAX_QTY, MAX_QTY) - cart.qtyOf(info.slug);
-  if (room <= 0) { announce(card, info.stock !== null ? `Only ${info.stock} available.` : 'You have the most you can order.'); return; }
+  const room = capOf(info) - cart.qtyOf(info.slug);
+  if (room <= 0) { announce(card, info.stock !== null && !isPre(info) ? `Only ${info.stock} available.` : 'You have the most you can order.'); return; }
   if (!cart.add(info.slug, 1)) { announce(card, 'Your cart is full. Remove something first.'); return; }
   announce(card, `Added 1 x ${info.name} to your cart.`);
   renderCardAction(card);
@@ -101,7 +110,7 @@ function stepCard(card, direction) {
   const info = cardInfo(card);
   const qty = cart.qtyOf(info.slug);
   if (direction > 0) {
-    if (qty >= Math.min(info.stock ?? MAX_QTY, MAX_QTY)) return;
+    if (qty >= capOf(info)) return;
     cart.add(info.slug, 1);
   } else if (qty <= 1) cart.remove(info.slug);
   else cart.setQty(info.slug, qty - 1);
@@ -128,8 +137,9 @@ async function updateDialog(dlg) {
   const ids = nonDefaultIds(dlg);
   const customised = ids.length > 0;
   const delta = chosen(dlg).reduce((sum, i) => sum + Number(i.dataset.delta || 0), 0);
-  const inCart = customised || info.stock === null ? 0 : cart.qtyOf(info.slug);
-  const limit = customised || info.stock === null ? MAX_QTY : Math.max(0, Math.min(info.stock, MAX_QTY) - inCart);
+  const pre = isPre(info);
+  const inCart = (customised && !pre) || info.stock === null ? 0 : cart.qtyOf(info.slug);
+  const limit = pre ? Math.max(0, capOf(info) - inCart) : customised || info.stock === null ? MAX_QTY : Math.max(0, Math.min(info.stock, MAX_QTY) - inCart);
   const output = dlg.querySelector('[data-qty-value]');
   if (!output) return;
   const qty = limit === 0 ? 1 : clampQty(output.textContent, limit);
@@ -138,11 +148,13 @@ async function updateDialog(dlg) {
   dlg.querySelector('[data-qty-minus]').disabled = qty <= 1;
   const add = dlg.querySelector('[data-dialog-add]');
   add.disabled = limit === 0;
+  const addLabel = dlg.querySelector('[data-dialog-add-label]'); if (addLabel) addLabel.textContent = pre ? 'Pre-order' : 'Add to cart';
   dlg.querySelector('[data-dialog-total]').textContent = limit === 0 ? '' : ` · ${formatPrice((info.price + delta) * qty)}`;
   // Stock: only standard lines use the frozen stock; customised lines are made to order.
   const stockLine = dlg.querySelector('[data-stock-line]');
   let text = '';
-  if (!customised && info.stock !== null) {
+  if (pre) text = preorderLabel(info.preReady);
+  else if (!customised && info.stock !== null) {
     if (limit === 0 && info.stock > 0) text = `All ${info.stock} are already in your cart.`;
     else if (info.stock <= siteConfig.lowStockThreshold) text = `Only ${info.stock} left`;
   }
@@ -247,9 +259,15 @@ document.addEventListener('pointercancel', endDrag);
 
 document.querySelectorAll('[data-slug]').forEach(renderCardAction);
 // Real backend: the stock in the page is from the last build, so read the current stock and redraw the cards.
-loadRuntimeStock().then((stock) => {
-  if (!stock) return;
-  document.querySelectorAll('[data-slug]').forEach((card) => { if (stock.has(card.dataset.slug)) card.dataset.stock = String(stock.get(card.dataset.slug)); else delete card.dataset.stock; renderCardAction(card); });
+Promise.all([loadRuntimeStock(), loadRuntimePreorder()]).then(([stock, pre]) => {
+  document.querySelectorAll('[data-slug]').forEach((card) => {
+    if (stock) { if (stock.has(card.dataset.slug)) card.dataset.stock = String(stock.get(card.dataset.slug)); else delete card.dataset.stock; }
+    if (pre) {
+      const r = pre.get(card.dataset.slug);
+      if (r && r.preorder_enabled && r.preorder_ready_date) { card.dataset.preorderReady = r.preorder_ready_date; if (r.preorder_limit) card.dataset.preorderLimit = String(r.preorder_limit); else delete card.dataset.preorderLimit; } else { delete card.dataset.preorderReady; delete card.dataset.preorderLimit; }
+    }
+    renderCardAction(card);
+  });
 });
 
 // ---- Filter chips and search. Every card is in the HTML; this only hides and shows them. ----

@@ -19,11 +19,22 @@ export async function loadRuntimeStock() {
   } catch { return null; }
 }
 
+// slug -> { preorder_enabled, preorder_ready_date, preorder_limit }; read live so a change needs no new build. Null when not available.
+export async function loadRuntimePreorder() {
+  if (!isLive()) return null;
+  try {
+    const rows = await restGet('products?select=slug,preorder_enabled,preorder_ready_date,preorder_limit');
+    return new Map(rows.map((r) => [r.slug, r]));
+  } catch { return null; }
+}
+
 export async function loadProducts() {
   let products;
   try { products = await getJson('data/products.json'); } catch { products = await getJson('data/products.seed.json'); }
   const stock = await loadRuntimeStock();
   if (stock) for (const p of products) p.stock_quantity = stock.has(p.slug) ? stock.get(p.slug) : null;
+  const pre = await loadRuntimePreorder();
+  if (pre) for (const p of products) Object.assign(p, pre.get(p.slug) || { preorder_enabled: false, preorder_ready_date: null, preorder_limit: null });
   return products;
 }
 
@@ -42,7 +53,7 @@ export async function loadPickup() {
   if (Number.isFinite(Number(s.low_stock_threshold))) siteConfig.lowStockThreshold = Number(s.low_stock_threshold);
   if (Number.isFinite(Number(s.max_qty_per_item))) siteConfig.limits.maxQtyPerItem = Number(s.max_qty_per_item);
   return {
-    settings: { min_lead_hours: Number(s.min_lead_hours) || 24, max_days_ahead: Number(s.max_days_ahead) || 14 },
+    settings: { min_lead_hours: Number.isFinite(Number(s.min_lead_hours)) && s.min_lead_hours !== null && s.min_lead_hours !== undefined ? Number(s.min_lead_hours) : 1, max_days_ahead: Number(s.max_days_ahead) || 14 },
     rules: rules.map((r) => ({ ...r, start_time: hhmm(r.start_time), end_time: hhmm(r.end_time) })),
     exceptions: exceptions.map((e) => ({ ...e, start_time: hhmm(e.start_time), end_time: hhmm(e.end_time) })),
   };

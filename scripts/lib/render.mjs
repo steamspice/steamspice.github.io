@@ -52,6 +52,12 @@ function priceBlock(p) {
 
 const groupsOf = (p) => (p.option_groups || []).filter((g) => (g.options || []).length);
 const hasOptions = (p) => groupsOf(p).length > 0;
+// Pre-order (D-071): stock 0, the switch on, and a ready date that has not passed. The date is also checked again in the browser.
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const preorderReady = (p) => (p.preorder_enabled && p.preorder_ready_date && p.preorder_ready_date >= todayIso() ? p.preorder_ready_date : null);
+const preorderOf = (p) => (preorderReady(p) && Number.isInteger(p.stock_quantity) && p.stock_quantity === 0 ? preorderReady(p) : null);
+const shortDay = (iso) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00:00Z`));
+const preorderText = (iso) => `Pre-order · ready from ${shortDay(iso)}`;
 const isSoldOut = (p) => Number.isInteger(p.stock_quantity) && p.stock_quantity === 0;
 const delta = (o) => (o.price_delta_pence ? ` <span class="opt-delta">+ ${formatPrice(o.price_delta_pence)}</span>` : '');
 
@@ -87,18 +93,19 @@ function dialogHtml(p) {
   const stock = Number.isInteger(p.stock_quantity) ? p.stock_quantity : null;
   const soldOut = isSoldOut(p);
   const lowStock = stock !== null && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
-  const stockText = soldOut ? 'Sold out' : lowStock ? `Only ${stock} left` : '';
+  const pre = preorderOf(p);
+  const stockText = pre ? preorderText(pre) : soldOut ? 'Sold out' : lowStock ? `Only ${stock} left` : '';
   const stockLine = `<p class="stock-line" data-stock-line${stockText ? '' : ' hidden'}>${stockText ? (p.stock_pending ? `<span data-pending>${stockText}</span>` : stockText) : ''}</p>`;
-  const buy = priced && p.available && !soldOut
+  const buy = priced && p.available && (!soldOut || pre)
     ? `<div class="dialog-buy">
         <div class="stepper" role="group" aria-label="Quantity of ${esc(p.name)}">
           <button type="button" class="qty-btn" data-qty-minus aria-label="Decrease quantity of ${esc(p.name)}">&minus;</button>
           <output class="stepper-count" data-qty-value>1</output>
           <button type="button" class="qty-btn" data-qty-plus aria-label="Increase quantity of ${esc(p.name)}">+</button>
         </div>
-        <button type="button" class="btn" data-dialog-add>Add to cart<span data-dialog-total> · ${formatPrice(p.price_pence)}</span></button>
+        <button type="button" class="btn" data-dialog-add><span data-dialog-add-label>${pre ? 'Pre-order' : 'Add to cart'}</span><span data-dialog-total> · ${formatPrice(p.price_pence)}</span></button>
       </div>`
-    : (soldOut ? '' : '<p class="stock-line">Not available yet</p>');
+    : (soldOut && !pre ? '' : '<p class="stock-line">Not available yet</p>');
   return `<dialog class="product-dialog" aria-labelledby="dlg-${esc(p.slug)}-title" data-dialog>
   <div class="dialog-panel" tabindex="-1" autofocus>
     <span class="dialog-handle" aria-hidden="true" data-dialog-handle></span>
@@ -128,11 +135,14 @@ function card(p) {
   const priced = p.price_pence != null;
   const stock = Number.isInteger(p.stock_quantity) ? p.stock_quantity : null;
   const soldOut = isSoldOut(p);
-  const buyable = p.available && priced && !soldOut;
-  const attrs = `id="product-${esc(p.slug)}" data-slug="${esc(p.slug)}"${priced ? ` data-price-pence="${p.price_pence}"` : ''} data-kind="${esc(p.kind)}" data-name="${esc(p.name.toLowerCase())}" data-has-options="${hasOptions(p)}"${stock !== null ? ` data-stock="${stock}"` : ''}${stock !== null && p.stock_pending ? ' data-stock-pending' : ''}`;
+  const pre = preorderOf(p);
+  const buyable = p.available && priced && (!soldOut || Boolean(pre));
+  const preAttrs = preorderReady(p) ? ` data-preorder-ready="${esc(preorderReady(p))}"${p.preorder_limit ? ` data-preorder-limit="${p.preorder_limit}"` : ''}` : '';
+  const attrs = `id="product-${esc(p.slug)}" data-slug="${esc(p.slug)}"${priced ? ` data-price-pence="${p.price_pence}"` : ''} data-kind="${esc(p.kind)}" data-name="${esc(p.name.toLowerCase())}" data-has-options="${hasOptions(p)}"${stock !== null ? ` data-stock="${stock}"` : ''}${stock !== null && p.stock_pending ? ' data-stock-pending' : ''}${preAttrs}`;
   const action = buyable
     ? `<div class="card-action" data-card-action>
-      <button type="button" class="btn btn-add" data-add-to-cart>Add to cart<span class="visually-hidden">: ${esc(p.name)}</span></button>
+      ${preorderReady(p) ? `<p class="preorder-line" data-preorder-line${pre ? '' : ' hidden'}>${pre ? esc(preorderText(pre)) : ''}</p>` : ''}
+      <button type="button" class="btn btn-add" data-add-to-cart>${pre ? 'Pre-order' : 'Add to cart'}<span class="visually-hidden">: ${esc(p.name)}</span></button>
       <p class="added-note" role="status" data-added-note></p>
     </div>`
     : `<div class="card-action"><p class="badge badge-unavailable">${soldOut ? 'Sold out' : 'Not available yet'}</p></div>`;

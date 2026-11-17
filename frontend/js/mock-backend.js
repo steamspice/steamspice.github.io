@@ -4,7 +4,7 @@
 import { getPickupOptions, noticeText, ukParts } from './pickup.js';
 import { siteConfig } from './site-config.js';
 import { toWhatsAppNumber } from './whatsapp.js';
-import { SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateWindows, validateGroup, validateIngredients, validatePhoto, validateProduct, validateRule, validateSlot } from './admin-rules.js';
+import { SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateWindows, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from './admin-rules.js';
 
 export const STORE_KEY = 'ss-store-v2';
 export const STATUSES = ['new', 'confirmed', 'ready', 'collected', 'cancelled'];
@@ -84,14 +84,16 @@ export function salesSummary(state, from, to) {
 export function prepList(state, from, to) {
   const orders = activeOrders(state).filter((o) => o.pickup_date && o.pickup_date >= from && o.pickup_date <= (to || from));
   const products = new Map();
+  const preorders = new Map(); // pre-order lines are totalled apart from in-stock ones
   const options = new Map();
   const customised = [];
   for (const o of orders) {
     for (const l of o.items) {
-      const p = products.get(l.slug) || { slug: l.slug, name: l.name, unit_label: l.unit_label, qty: 0, customisedQty: 0 };
+      if (l.is_preorder) { const e = preorders.get(l.slug) || { slug: l.slug, name: l.name, unit_label: l.unit_label, qty: 0, ready_from: l.ready_from }; e.qty += l.qty; preorders.set(l.slug, e); }
+      const p = l.is_preorder ? { qty: 0, customisedQty: 0 } : products.get(l.slug) || { slug: l.slug, name: l.name, unit_label: l.unit_label, qty: 0, customisedQty: 0 };
       p.qty += l.qty;
       if (l.customised) p.customisedQty += l.qty;
-      products.set(l.slug, p);
+      if (!l.is_preorder) products.set(l.slug, p);
       for (const opt of l.options) {
         const key = `${l.slug}|${opt.group}|${opt.label}`;
         const entry = options.get(key) || { slug: l.slug, product: l.name, group: opt.group, label: opt.label, qty: 0 };
@@ -101,13 +103,13 @@ export function prepList(state, from, to) {
       if (l.customised) customised.push({ order_number: o.order_number, name: o.customer_name, pickup_date: o.pickup_date, pickup_time: o.pickup_time, qty: l.qty, product: l.name, options: l.options.map((x) => x.label) });
     }
   }
-  return { orders: orders.length, products: [...products.values()], options: [...options.values()], customised };
+  return { orders: orders.length, products: [...products.values()], preorders: [...preorders.values()], options: [...options.values()], customised };
 }
 
 // ---------- stock ----------
 const standardQty = (order) => {
   const map = new Map();
-  for (const l of order.items) if (!l.customised) map.set(l.slug, (map.get(l.slug) || 0) + l.qty);
+  for (const l of order.items) if (!l.customised && !l.is_preorder) map.set(l.slug, (map.get(l.slug) || 0) + l.qty);
   return map;
 };
 const productOf = (state, slug) => state.products.find((p) => p.slug === slug);
@@ -134,7 +136,7 @@ function nextNumber(state, orderDate) {
   return `${state.settings.order_prefix || ORDER_PREFIX}-${d}${m}-${pad2(state.counters[orderDate])}`;
 }
 
-function buildLine(state, raw) {
+function buildLine(state, raw, now = new Date()) {
   const { limits } = siteConfig;
   const product = productOf(state, raw.slug);
   if (!product || !product.available || product.active === false || product.price_pence == null) throw new RuleError('product', 'One of the items is no longer available.');
@@ -152,7 +154,10 @@ function buildLine(state, raw) {
     chosen.push({ group: group.label, label: option.label, price_delta_pence: option.price_delta_pence || 0, is_default: Boolean(option.is_default) });
   }
   const unit = product.price_pence + chosen.reduce((sum, o) => sum + o.price_delta_pence, 0);
+  // Pre-order (D-071): stock 0, the switch on, a ready date that has not passed. Such a line never touches stock.
+  const preorder = product.stock_quantity === 0 && product.preorder_enabled && product.preorder_ready_date && product.preorder_ready_date >= ukToday(now);
   return {
+    is_preorder: Boolean(preorder), ready_from: preorder ? product.preorder_ready_date : null,
     slug: product.slug, name: product.name, unit_label: product.unit_label, qty, unit_price_pence: unit,
     options: chosen.map(({ group, label, price_delta_pence }) => ({ group, label, price_delta_pence })),
     customised: chosen.some((o) => !o.is_default),
@@ -176,15 +181,29 @@ export function placeOrder(state, input, now = new Date()) {
     if (!name) throw new RuleError('name', 'Enter your name.');
     if (!toWhatsAppNumber(phoneRaw)) throw new RuleError('phone', 'Enter a UK phone number, for example 07123 456789.');
   }
-  const lines = input.items.map((raw) => buildLine(state, raw));
+  const lines = input.items.map((raw) => buildLine(state, raw, now));
 
   // Standard lines are frozen stock and must be in stock. Customised lines are made to order.
   const need = new Map();
-  for (const l of lines) if (!l.customised) need.set(l.slug, (need.get(l.slug) || 0) + l.qty);
+  for (const l of lines) if (!l.customised && !l.is_preorder) need.set(l.slug, (need.get(l.slug) || 0) + l.qty);
   for (const [slug, qty] of need) {
     const p = productOf(state, slug);
     if (p.stock_quantity != null && qty > p.stock_quantity) throw new RuleError('stock', p.stock_quantity === 0 ? `${p.name} is sold out.` : `Only ${p.stock_quantity} of ${p.name} left.`);
   }
+
+  // Pre-order rules: the limit for the batch has room, and the pickup day is on or after the latest ready date.
+  const pre = new Map();
+  for (const l of lines) if (l.is_preorder) { const e = pre.get(l.slug) || { qty: 0, ready: l.ready_from }; e.qty += l.qty; pre.set(l.slug, e); }
+  for (const [slug, e] of pre) {
+    const p = productOf(state, slug);
+    if (p.preorder_limit) {
+      const taken = state.orders.filter((o) => o.status !== 'cancelled' && o.status !== 'collected').flatMap((o) => o.items).filter((l) => l.slug === slug && l.is_preorder && l.ready_from === e.ready).reduce((n, l) => n + l.qty, 0);
+      const room = Math.max(0, p.preorder_limit - taken);
+      if (e.qty > room) throw new RuleError('preorder_full', room === 0 ? `Pre-orders for ${p.name} are full.` : `Only ${room} more pre-orders for ${p.name}.`);
+    }
+  }
+  const readyMax = [...pre.values()].map((e) => e.ready).sort().pop() || null;
+  if (readyMax && (!input.pickupDate || input.pickupDate < readyMax)) throw new RuleError('pickup', 'Pre-order items are ready from ' + new Date(`${readyMax}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }) + '. Please choose that day or later.');
 
   const pickupDate = input.pickupDate || null;
   const pickupTime = input.pickupTime || null;
@@ -321,7 +340,7 @@ export function settingsWithDefaults(state) {
 
 export function adminProducts(state) {
   return state.products.map((p, i) => ({
-    id: p.slug, slug: p.slug, name: p.name, kind: p.kind, category: (state.categories || []).find((x) => x.id === p.category_id)?.name ?? null, category_id: p.category_id ?? null, unit_label: p.unit_label || '',
+    id: p.slug, slug: p.slug, name: p.name, kind: p.kind, category: (state.categories || []).find((x) => x.id === p.category_id)?.name ?? null, category_id: p.category_id ?? null, preorder_enabled: Boolean(p.preorder_enabled), preorder_ready_date: p.preorder_ready_date ?? null, preorder_limit: p.preorder_limit ?? null, unit_label: p.unit_label || '',
     price_pence: p.price_pence ?? null, available: p.available !== false, active: p.active !== false, sort_order: p.sort_order ?? i + 1,
     photo_path: p.photo_path ?? p.photo ?? null, photo_alt: p.photo_alt ?? '', ingredients: [...(p.ingredients || [])], allergen_ids: [...(p.allergen_ids || [])], allergen_note: p.allergen_note ?? '', allergens_checked_at: p.allergens_checked_at ?? null,
     stock_quantity: p.stock_quantity ?? null,
@@ -338,7 +357,7 @@ const findProduct = (state, id) => state.products.find((p) => p.slug === id) || 
 export function saveProduct(state, input) {
   const price = input.price_pence ?? null;
   const merged = { ...input, price_pence: price };
-  const error = validateProduct(merged) || validatePhoto(merged) || validateIngredients({ ingredients: input.ingredients || [], allergen_ids: input.allergen_ids || [], allergen_note: input.allergen_note }) || validateChecked({ active: Boolean(input.active), checked: Boolean(input.allergens_checked_at) });
+  const error = validateProduct(merged) || validatePreorder(merged, ukToday()) || validatePhoto(merged) || validateIngredients({ ingredients: input.ingredients || [], allergen_ids: input.allergen_ids || [], allergen_note: input.allergen_note }) || validateChecked({ active: Boolean(input.active), checked: Boolean(input.allergens_checked_at) });
   if (error) fail(error);
   let p;
   if (input.id) p = findProduct(state, input.id);
@@ -350,7 +369,7 @@ export function saveProduct(state, input) {
     state.products.push(p);
   }
   Object.assign(p, {
-    name: String(input.name).trim(), kind: input.kind, unit_label: String(input.unit_label || '').trim(), price_pence: price, category_id: input.category_id || undefined,
+    name: String(input.name).trim(), kind: input.kind, unit_label: String(input.unit_label || '').trim(), price_pence: price, category_id: input.category_id || undefined, preorder_enabled: Boolean(input.preorder_enabled), preorder_ready_date: input.preorder_enabled ? input.preorder_ready_date : (input.preorder_ready_date || null), preorder_limit: input.preorder_limit || null,
     available: Boolean(input.available), active: Boolean(input.active), photo_path: input.photo_path || null, photo_alt: String(input.photo_alt || '').trim(),
     ingredients: (input.ingredients || []).map((t) => String(t).trim().replace(/\s+/g, ' ')), allergen_ids: [...(input.allergen_ids || [])], allergen_note: String(input.allergen_note || '').trim(), allergens_checked_at: input.allergens_checked_at || null,
   });

@@ -384,3 +384,5 @@ html:has(dialog[open]) { overflow: hidden; }
 
 .ingredient-list { display: flex; flex-wrap: wrap; gap: var(--space-3xs) var(--space-xs); margin: 0 0 var(--space-xs); padding: 0; list-style: none; }
 .ingredient-list li:not(:last-child)::after { content: ","; }
+.preorder-line { margin: 0 0 var(--space-2xs); font-size: var(--text-small); font-weight: 700; color: var(--emerald); }
+.preorder-line[hidden] { display: none; }

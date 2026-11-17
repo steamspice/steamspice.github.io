@@ -2,7 +2,7 @@
 
 The coding agent updates this file at the end of every phase (see `docs/usage-rules.md` section 7). Trust it instead of re-exploring the repository. Edit only the lines that changed.
 
-- Last updated: 2026-11-13 (Step 4p, coding agent)
+- Last updated: 2026-11-17 (Step 4q, coding agent)
 - Current step: **Step 4d built and merged. Waiting for the owner: backend setup (`backend/README.md` section 3) and the live checks**
 - Next action: owner finishes `backend/README.md` and tests the admin on the live site; then Step 4f (admin visual style from the approved reference and Products redesign, D-061), then Step 4g (editable allergens and ingredients, Save bar fix, D-062), then Step 4h (weekly pickup hours redesign, D-063), then Step 4i (admin sales summary, D-064), then Step 4j (Realtime connection fix), then Step 4n (admin fixes round: product editor back to one page, Settings hub look and back path, notice-period modal, red allergen navigation, order More menu, Publish wording; 4m is folded into it), Step 4o (blurred colour patches on the public site, D-067), Step 4p (new logo everywhere D-068, sauce pictures D-069, repo address default D-070), Step 4q (messaging fallback, same-day pickup, stock labels, pre-orders, D-071), Step 4l (catalogue: categories, reusable options, allergens by product, D-065), then Step 5 (SEO, hardening, launch).
 
@@ -239,6 +239,14 @@ Legend: `[ ]` not done, `[x]` done. For every ticked item add: commit hash, one-
 - [x] Orders cards per the reference (Confirm and More on one row; Message customer moved into More); Home, Prep, Pickup, Settings use the kit through shared CSS
 - [ ] Owner checks: press feel, toggles, glass bars over cards, patches on all pages, a real product save, the publish banner
 
+## Step 4q — Messaging fallback, same-day pickup, stock labels, pre-orders (D-071)
+
+- [x] A: no blank window; on a phone the tab goes to the WhatsApp app (`whatsapp://`), on a computer the order shows an Open WhatsApp button; "Didn't go through?" strip (text message `sms:+NUMBER?&body=`, copy, Done) kept in sessionStorage; the Message button offers the same choices (`admin/js/message-panel.js`).
+- [x] B: migration 0013 sets `min_lead_hours` to 1 only where it was still 24; seed and fallbacks 1; label "Minimum notice for in-stock items (hours)"; the cart shows "Earliest pickup: ..." from the picker's own options.
+- [x] C: stock labels checked (already: nothing when plenty, Only N left, Sold out).
+- [x] D: `products.preorder_enabled / preorder_ready_date / preorder_limit`; order lines carry `is_preorder` and `ready_from`; `_place_order` and `_set_order_status` updated (migration 0013) with tests; editor switch, date and limit; card, dialog, cart, receipt, order card badge, prep list.
+- Site moved to https://steamspice.github.io/ (D-070): trigger-rebuild default repo and the README redirect URL fixed.
+
 ## Step 4p — New logo (D-068) and sauce pictures (D-069)
 
 - [x] `npm run logo` (`scripts/make-logo.mjs`) makes `logo-full-{240,480,960}.webp`, `logo-mark-{64,128,256}.webp`, `favicon-32.png`, `favicon-180.png`, `icon-512.png`, the admin icons and `og-share.webp` (1200x630) from `docs/design/logo/logo-source-transparent.png`; outputs are committed. Old `favicon.svg` and `placeholder-og.webp` removed.
@@ -448,3 +456,5 @@ Legend: `[ ]` not done, `[x]` done. For every ticked item add: commit hash, one-
 - 2026-11-13, step 4n (demo backend only): build passes; mock-backend test (19) passes; local PostgreSQL tests pass incl. reopen on a full day; Playwright at 390 px: flagged check and price, auto Active on tick and save, notice modal (Escape, validation, unsaved edit kept), failed save focus, hub and back path, More menu per status; no overflow or oversized SVG at 320, 390 and 1440 px on Settings and the editor. Not checked: real Supabase.
 
 - 2026-11-13, step 4l: build passes; database tests pass (effective groups, tampered or unlinked option refused, snapshot survives rename and delete, bulk allergens clear the check, RLS on the new tables, migration kept every product's options); build-supabase and mock-backend tests pass; Playwright at 390 px on the mock backend: Manage menu, categories, options library and applies-to, editor options card and Create new group, category filter, allergens bulk and summary. Not checked: real Supabase (migrations 0011 and 0012 applied by the workflow).
+
+- 2026-11-17, step 4q (demo backend only): build passes; database tests pass (same-day pickup, pre-order rules, limit, cancel and re-open leave stock alone); mock-backend, pickup, admin-rules, regions, build-supabase, launch-gate tests pass; Playwright at 390 px: pre-order card and cart (earliest line, ready-date floor), order card badge and return strip, sms link form, invalid-phone strip. Not checked: real WhatsApp, the phone app hand-off and return, real Supabase.

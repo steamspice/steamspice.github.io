@@ -123,7 +123,7 @@ export function validateException(e) {
 
 // The settings form. Returns { ok, patch } or { ok: false, errors: { field: message } }. Empty daily limit = no limit.
 export const SETTING_FIELDS = {
-  min_lead_hours: { label: 'Minimum notice (hours)', min: 0, max: 720 },
+  min_lead_hours: { label: 'Minimum notice for in-stock items (hours)', min: 0, max: 720 },
   custom_min_lead_hours: { label: 'Notice for customised orders (hours)', min: 0, max: 720 },
   max_days_ahead: { label: 'How many days ahead customers can choose', min: 1, max: 365 },
   max_qty_per_item: { label: 'Most of one item per order', min: 1, max: 100 },
@@ -277,4 +277,16 @@ export function salesBars(rows) {
     b.to = r.day; b.total += Number(r.total_pence); b.count += Number(r.order_count);
   }
   return { total, count, bars, weekly: true };
+}
+
+// ---------- Pre-orders (D-071) ----------
+// Only checked when the switch is on. The ready date must be today or later; the limit is optional (blank = no limit).
+export function validatePreorder(p, todayIso) {
+  if (!p.preorder_enabled) return null;
+  const date = String(p.preorder_ready_date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Choose the date the pre-order is ready from.';
+  if (date < todayIso) return 'The ready date has passed. Choose today or a later date.';
+  const limit = p.preorder_limit;
+  if (limit !== null && limit !== undefined && limit !== '' && !(Number.isInteger(Number(limit)) && Number(limit) >= 1 && Number(limit) <= 1000)) return 'The limit must be a whole number from 1 to 1000, or left empty.';
+  return null;
 }

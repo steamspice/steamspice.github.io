@@ -243,3 +243,34 @@ test('catalogue: bulk allergens clear the check of changed products only', () =>
   assert.ok(s.products.find((p) => p.slug === 'veg-momo').allergens_checked_at);
   assert.equal(setAllergenProducts(s, id, ['chicken-momo']), 0);
 });
+
+// Step 4q: pre-orders (D-071)
+import { validatePreorder } from '../frontend/js/admin-rules.js';
+test('pre-order: only at stock 0 with the switch on; never touches stock; needs a pickup day on or after the ready date; the limit counts open lines', () => {
+  const s = buildInitialState({ products: read('products.seed.json'), pickup: read('pickup.seed.json') }, new Date('2026-11-13T12:00:00Z'));
+  const now = new Date('2026-11-13T12:00:00Z');
+  const veg = s.products.find((p) => p.slug === 'veg-momo');
+  veg.stock_quantity = 0;
+  const order = (extra = {}, qty = 1) => placeOrder(s, { items: [{ slug: 'veg-momo', qty }], name: 'T', phone: '07700 900123', ...extra }, now);
+  assert.throws(() => order({ pickupDate: '2026-11-21', pickupTime: '10:00' }), /sold out/);
+  Object.assign(veg, { preorder_enabled: true, preorder_ready_date: '2026-11-20', preorder_limit: 3 });
+  assert.throws(() => order({ pickupDate: '2026-11-14', pickupTime: '10:00' }), /ready from/);
+  assert.throws(() => order({}), /ready from/);
+  order({ pickupDate: '2026-11-21', pickupTime: '10:00' }, 2);
+  assert.equal(veg.stock_quantity, 0);
+  const placed = s.orders.at(-1);
+  assert.equal(placed.items[0].is_preorder, true); assert.equal(placed.items[0].ready_from, '2026-11-20');
+  assert.throws(() => order({ pickupDate: '2026-11-21', pickupTime: '11:00' }, 2), /Only 1 more/);
+  order({ pickupDate: '2026-11-21', pickupTime: '11:00' }, 1);
+  setOrderStatus(s, placed.id, 'cancelled', now); assert.equal(veg.stock_quantity, 0); // cancelling never returns stock for a pre-order
+  assert.equal(prepList(s, '2026-11-21', '2026-11-21').preorders[0].qty, 1);
+  veg.preorder_ready_date = '2026-11-01'; // ready date passed: sold out again
+  assert.throws(() => order({ pickupDate: '2026-11-21', pickupTime: '12:00' }), /sold out/);
+});
+test('pre-order validation in plain words', () => {
+  assert.match(validatePreorder({ preorder_enabled: true, preorder_ready_date: '' }, '2026-11-17'), /Choose the date/);
+  assert.match(validatePreorder({ preorder_enabled: true, preorder_ready_date: '2026-11-01' }, '2026-11-17'), /passed/);
+  assert.match(validatePreorder({ preorder_enabled: true, preorder_ready_date: '2026-11-20', preorder_limit: 0 }, '2026-11-17'), /limit/);
+  assert.equal(validatePreorder({ preorder_enabled: true, preorder_ready_date: '2026-11-20', preorder_limit: '' }, '2026-11-17'), null);
+  assert.equal(validatePreorder({ preorder_enabled: false }, '2026-11-17'), null);
+});

@@ -90,3 +90,15 @@ test('a one-minute step offers every minute and the notice period trims the firs
   assert.equal(pickupMinutes(day, '11').length, 60);
   assert.equal(windowText(day), 'Available 09:30 to 12:00 on Saturday');
 });
+
+// Step 4q: same-day pickup, the earliest line, and the pre-order date floor
+import { earliestLabel, getPickupOptions as options } from '../frontend/js/pickup.js';
+test('same-day pickup offers today\'s remaining slots from one hour from now, and the earliest line says so', () => {
+  const cfg = { settings: { min_lead_hours: 1, max_days_ahead: 14 }, rules: [{ weekday: 6, start_time: '10:00', end_time: '18:00', slot_minutes: 30, active: true }], exceptions: [] };
+  const now = new Date('2026-11-14T13:10:00Z'); // Saturday, 13:10 UK
+  const o = options(cfg, now);
+  assert.equal(o[0].date, '2026-11-14'); assert.equal(o[0].times[0].value, '14:30');
+  assert.equal(earliestLabel(o, now), 'Earliest pickup: today from 2:30 pm');
+  assert.equal(options(cfg, now, { notBefore: '2026-11-21' })[0].date, '2026-11-21');
+  assert.equal(earliestLabel([], now), null);
+});

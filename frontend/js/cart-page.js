@@ -3,7 +3,7 @@ import './menu.js';
 import { buildLines, cartTotal, formatPrice, getCart, lineKey, updateHeaderCount } from './cart.js';
 import { loadPickup, loadProducts } from './data.js';
 import { getOrderingState, OrderRejected, submitOrder } from './order-gateway.js';
-import { dateLabel, getPickupOptions, noticeText, pickupHours, pickupMinutes, windowText } from './pickup.js';
+import { dateLabel, earliestLabel, getPickupOptions, noticeText, pickupHours, pickupMinutes, shortDateLabel, windowText } from './pickup.js';
 import { siteConfig } from './site-config.js';
 import { buildOrderLink, toNationalFormat, toWhatsAppNumber } from './whatsapp.js';
 
@@ -96,6 +96,7 @@ function render() {
       text.append(el('p', 'error', line.soldOut ? 'Sold out. It will be removed when you confirm.' : 'No longer available. It will be removed when you confirm.'));
     } else {
       text.append(el('p', 'menu-meta', `${line.product.unit_label} \u2014 ${formatPrice(line.unitPence)} each`));
+      if (line.preorder) text.append(el('p', 'preorder-line', `Pre-order, ready from ${shortDateLabel(line.readyFrom)}`));
       if (line.customised) {
         const opts = el('p', 'line-options', line.optionText + ' ');
         opts.append(el('span', 'badge', 'Customised'));
@@ -120,12 +121,20 @@ function render() {
 function refreshPickup(lines) {
   if (!pickupConfig) return;
   const customised = lines.some((l) => l.customised && !l.unavailable);
+  // a cart with a pre-order line: only days on or after the latest ready date
+  const ready = lines.filter((l) => l.preorder && !l.unavailable).map((l) => l.readyFrom).sort().pop() || null;
   const keep = dateSel.value;
-  pickupOptions = getPickupOptions(pickupConfig, new Date(), { customised, customLeadHours: siteConfig.customMinLeadHours, closedDates });
+  pickupOptions = getPickupOptions(pickupConfig, new Date(), { customised, customLeadHours: siteConfig.customMinLeadHours, closedDates, notBefore: ready });
   dateSel.replaceChildren(new Option('No date chosen', ''));
   pickupOptions.forEach((o) => dateSel.append(new Option(o.label, o.date)));
   dateSel.value = pickupOptions.some((o) => o.date === keep) ? keep : '';
   fillHours();
+  const earliest = $('[data-earliest]');
+  const text = lines.length ? earliestLabel(pickupOptions) : null; // from the same options the picker uses; nothing invented
+  earliest.hidden = !text; earliest.textContent = text || '';
+  const preNote = $('[data-preorder-note]');
+  preNote.hidden = !ready;
+  if (ready) preNote.textContent = `Your cart has a pre-order, ready from ${shortDateLabel(ready)}, so pickup days start then.`;
   const note = $('[data-lead-note]');
   note.hidden = !customised;
   if (customised) {
@@ -211,7 +220,7 @@ async function confirm(e) {
   if (!lines.length) { render(); errorBox.textContent = 'There is nothing available in your cart.'; return; }
   const order = readOrder(lines);
   const totalPence = cartTotal(lines);
-  const summary = lines.map((l) => ({ qty: l.qty, name: l.product.name, unitLabel: l.product.unit_label, linePence: l.linePence, optionText: l.customised ? l.optionText : '' }));
+  const summary = lines.map((l) => ({ qty: l.qty, name: l.product.name, unitLabel: l.product.unit_label, linePence: l.linePence, optionText: l.customised ? l.optionText : '', preorderReadyFrom: l.preorder ? l.readyFrom : null }));
   setBusy(true);
   try {
     const result = await submitOrder({ ...order, totalPenceHint: totalPence });

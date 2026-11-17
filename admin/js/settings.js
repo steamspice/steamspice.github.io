@@ -47,9 +47,9 @@ function buildOrdering() {
   const message = field('Message customers see when paused', 'textarea', { value: settings.ordering_closed_message ?? '', rows: 3, maxLength: 300 });
   const fields = {}; const grid = el('div', { className: 'form-grid' });
   for (const [key, spec] of Object.entries(SETTING_FIELDS)) {
-    const hint = key.endsWith('lead_hours') ? hoursHint(settings[key]) : key === 'max_orders_per_day' ? 'Leave empty for no limit. Counts orders that are not cancelled, per pickup day.' : '';
+    const hint = key === 'min_lead_hours' ? '1 means a customer can order now and collect an hour later, inside your pickup hours. Close a day in Pickup hours if you are away.' : key.endsWith('lead_hours') ? hoursHint(settings[key]) : key === 'max_orders_per_day' ? 'Leave empty for no limit. Counts orders that are not cancelled, per pickup day.' : '';
     fields[key] = field(spec.label, 'text', { value: settings[key] ?? '', inputMode: 'numeric', hint });
-    if (key.endsWith('lead_hours')) fields[key].control.addEventListener('input', () => { fields[key].wrap.querySelector('.hint').textContent = hoursHint(fields[key].control.value); });
+    if (key.endsWith('lead_hours') && key !== 'min_lead_hours') fields[key].control.addEventListener('input', () => { fields[key].wrap.querySelector('.hint').textContent = hoursHint(fields[key].control.value); });
     grid.append(fields[key].wrap);
   }
   fields.order_prefix = field('Order number prefix', 'text', { value: settings.order_prefix ?? 'SS', maxLength: 6, hint: 'Capital letters. Order numbers look like SS-1311-01.' });

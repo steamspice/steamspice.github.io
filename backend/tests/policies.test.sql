@@ -207,6 +207,8 @@ select t.chk(t.seq($$select t.place(t.order_json('veg-momo', 1, jsonb_build_arra
 update product_stock set quantity = 2 where product_id = (select id from products where slug = 'veg-momo');
 select t.chk(t.place(t.order_json('veg-momo', 3)) ->> 'message' = 'Only 2 of Frozen veg momo left.' and t.stock('veg-momo') = 2, 'a quantity above the stock is rejected and stock never goes below 0');
 -- pickup rules
+select t.chk((select value from settings where key = 'min_lead_hours') = '1'::jsonb, 'the notice for in-stock items is 1 hour after the migration (it was the old default of 24)');
+update settings set value = '24' where key = 'min_lead_hours'; -- the rules below are written for a 24 hour notice
 select t.chk(t.place(t.order_json('chicken-momo', 1, '[]', '{"pickupDate":"2026-11-14","pickupTime":"10:30"}')) ->> 'code' = 'pickup', 'a time earlier than the 24 hour notice is rejected');
 select t.chk(t.place(t.order_json('chicken-momo', 1, '[]', '{"pickupDate":"2026-11-16","pickupTime":"10:30"}')) ->> 'code' = 'pickup', 'a Monday (no rule) is rejected');
 select t.chk(t.place(t.order_json('chicken-momo', 1, '[]', '{"pickupDate":"2026-11-14","pickupTime":"18:00"}')) ->> 'code' = 'pickup', 'a time outside the window is rejected');
@@ -276,6 +278,32 @@ select t.chk(t.count('authenticated', :'a', $$select * from public.sales_summary
 select t.chk(t.count('authenticated', :'a', $$select * from public.sales_summary('2026-03-01','2026-03-05') where day = '2026-03-04' and total_pence = 500 and order_count = 1$$) = 1, 'an order with no pickup date counts on the day it was placed');
 select t.chk(t.count('authenticated', :'a', $$select * from public.sales_summary('2026-03-01','2026-03-05') where day in ('2026-03-01','2026-03-03','2026-03-05') and total_pence = 0 and order_count = 0$$) = 3, 'days with no sales are zero');
 delete from orders where order_number like 'SS-T-%';
+
+-- ===== same-day pickup and pre-orders (Step 4q, D-071) =====
+update settings set value = '1' where key = 'min_lead_hours';
+select t.chk((t.place(t.order_json('chicken-momo', 1, '[]', '{"pickupDate":"2026-11-14","pickupTime":"10:30"}'), '2026-11-14 08:00:00+00') ->> 'ok')::boolean, 'with a 1 hour notice an in-stock item can be collected the same day, inside the pickup hours');
+select t.chk(t.place(t.order_json('chicken-momo', 1, '[]', '{"pickupDate":"2026-11-14","pickupTime":"10:30"}'), '2026-11-14 09:45:00+00') ->> 'code' = 'pickup', 'less than 1 hour before the slot is still refused');
+update product_stock set quantity = 0 where product_id = (select id from products where slug = 'veg-momo');
+update products set preorder_enabled = false, preorder_ready_date = '2026-11-20', preorder_limit = 3 where slug = 'veg-momo';
+select t.chk(t.place(t.order_json('veg-momo', 1, '[]', '{"pickupDate":"2026-11-22","pickupTime":"10:30"}')) ->> 'code' = 'stock', 'stock 0 without pre-order is sold out');
+update products set preorder_enabled = true where slug = 'veg-momo';
+select t.chk(t.place(t.order_json('veg-momo', 1, '[]', '{"pickupDate":"2026-11-14","pickupTime":"10:30"}')) ->> 'code' = 'pickup', 'a pre-order cannot be collected before its ready date');
+select t.chk(t.place(t.order_json('veg-momo', 1, '[]')) ->> 'code' = 'pickup', 'a pre-order needs a pickup day');
+select t.chk(t.seq($$select t.place(t.order_json('veg-momo', 2, '[]', '{"pickupDate":"2026-11-22","pickupTime":"10:30"}'))$$, $$select t.stock('veg-momo') = 0 and (select (items -> 0 ->> 'is_preorder')::boolean and items -> 0 ->> 'ready_from' = '2026-11-20' from orders order by created_at desc limit 1)$$), 'a pre-order is saved as a pre-order line and never touches stock');
+select t.chk(t.place(t.order_json('veg-momo', 2, '[]', '{"pickupDate":"2026-11-22","pickupTime":"11:30"}')) ->> 'code' = 'preorder_full', 'a pre-order above the limit room is refused (3 limit, 2 taken)');
+select t.chk((t.place(t.order_json('veg-momo', 1, '[]', '{"pickupDate":"2026-11-22","pickupTime":"11:30"}')) ->> 'ok')::boolean, 'the last place of the batch is accepted');
+create temp table pre as select id from orders where status = 'new' and (items -> 0 ->> 'is_preorder')::boolean order by created_at limit 1;
+select t.chk(t.seq(format('select public._set_order_status(%L, ''cancelled'')', (select id from pre)), $$select t.stock('veg-momo') = 0$$), 'cancelling a pre-order does not return stock');
+select t.chk((t.place(t.order_json('veg-momo', 2, '[]', '{"pickupDate":"2026-11-22","pickupTime":"15:00"}')) ->> 'ok')::boolean, 'a cancelled pre-order frees its places');
+select t.chk(t.seq(format('select public._set_order_status(%L, ''new'')', (select id from pre)), $$select t.stock('veg-momo') = 0$$), 're-opening a pre-order does not take stock');
+update products set preorder_ready_date = '2026-11-01' where slug = 'veg-momo';
+select t.chk(t.place(t.order_json('veg-momo', 1, '[]', '{"pickupDate":"2026-11-22","pickupTime":"10:30"}')) ->> 'code' = 'stock', 'a pre-order whose ready date has passed behaves as sold out');
+update products set preorder_ready_date = '2026-11-20' where slug = 'veg-momo';
+update product_stock set quantity = 5 where product_id = (select id from products where slug = 'veg-momo');
+select t.chk(t.seq($$select t.place(t.order_json('veg-momo', 1, '[]', '{"pickupDate":"2026-11-22","pickupTime":"10:30"}'))$$, $$select not coalesce((select (items -> 0 ->> 'is_preorder')::boolean from orders order by created_at desc limit 1), false) and t.stock('veg-momo') = 4$$), 'with stock again the order is an ordinary in-stock order (pre-order never applies)');
+update products set preorder_enabled = false, preorder_ready_date = null, preorder_limit = null where slug = 'veg-momo';
+update product_stock set quantity = 2 where product_id = (select id from products where slug = 'veg-momo');
+update settings set value = '24' where key = 'min_lead_hours';
 
 -- ===== catalogue (Step 4l) =====
 select t.chk(not exists (

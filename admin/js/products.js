@@ -5,7 +5,7 @@ import { PHOTO_QUALITY, PUBLISH_POLL_SECONDS } from './admin-config.js';
 import { confirmDialog, el, field, makeSwitch, toast } from './dom.js';
 import { groupForm, optionSummary } from './option-editor.js';
 import { mountAllergenManager, LEGAL_REMINDER } from './allergens.js';
-import { cleanTag, formatMoney, PHOTO_MAX_BYTES, PHOTO_MAX_EDGE, penceToPounds, poundsToPence, slugify, validateChecked, validateGroup, validateIngredients, validatePhoto, validatePhotoFile, validateProduct } from '../../js/admin-rules.js';
+import { cleanTag, formatMoney, PHOTO_MAX_BYTES, PHOTO_MAX_EDGE, penceToPounds, poundsToPence, slugify, validateChecked, validateGroup, validateIngredients, validatePhoto, validatePhotoFile, validatePreorder, validateProduct } from '../../js/admin-rules.js';
 
 const listBox = document.querySelector('[data-list]');
 const editorBox = document.querySelector('[data-editor]');
@@ -191,6 +191,7 @@ async function edit(id, guide = null) {
     photo_path: product?.photo_path ?? null, photo_alt: product?.photo_alt ?? '', ingredients: [...(product?.ingredients ?? [])], allergen_ids: [...(product?.allergen_ids ?? [])], allergen_note: product?.allergen_note ?? '',
     checked: Boolean(product?.allergens_checked_at), checkedAt: product?.allergens_checked_at ?? null, infoChanged: false,
     tracked: product ? product.stock_quantity != null : false, stock: product?.stock_quantity ?? 0,
+    preorder_enabled: Boolean(product?.preorder_enabled), preorder_ready_date: product?.preorder_ready_date ?? '', preorder_limit: product?.preorder_limit ?? '',
   };
   let pending = null; // { blob, name } a new photo not uploaded yet
   // option groups: the library, and the groups linked directly to this product. The category adds its own on top (effective groups).
@@ -381,7 +382,20 @@ async function edit(id, guide = null) {
   const drawLead = () => { leadLine.textContent = `Customised orders need ${noticeText(settings.custom_min_lead_hours ?? 48)} notice. This applies to all products.`; };
   drawLead();
   const editLead = el('button', { type: 'button', className: 'btn btn-secondary btn-small', onclick: () => noticeModal(settings, editLead, drawLead) }, 'Edit');
-  editorBox.append(card('Availability', active.row, available.row, el('div', { className: 'lead-row' }, leadLine, editLead)));
+  // Pre-order when sold out (D-071): customers order for the ready date or later; pre-orders never use or return stock.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const preBox = el('div', { className: 'preorder-box', hidden: !draft.preorder_enabled });
+  const readyField = field('Ready from', 'date', { value: draft.preorder_ready_date, min: todayIso });
+  const limitField = field('Limit (optional)', 'text', { value: draft.preorder_limit === null ? '' : String(draft.preorder_limit), inputMode: 'numeric', hint: 'How many you will take for this batch. Leave empty for no limit.' });
+  const preFlag = el('p', { className: 'flag-note', role: 'alert', hidden: true });
+  errors.preorder = errorLine();
+  const passed = draft.preorder_enabled && draft.preorder_ready_date && draft.preorder_ready_date < todayIso;
+  if (passed) { readyField.wrap.classList.add('is-flagged'); preFlag.textContent = 'Set a new ready date'; preFlag.hidden = false; }
+  readyField.control.addEventListener('input', () => { draft.preorder_ready_date = readyField.control.value; readyField.wrap.classList.remove('is-flagged'); preFlag.hidden = true; markDirty(); });
+  limitField.control.addEventListener('input', () => { draft.preorder_limit = limitField.control.value.trim(); markDirty(); });
+  preBox.append(readyField.wrap, preFlag, limitField.wrap, el('p', { className: 'muted' }, 'Customers can order for this date or later. Pre-orders do not use your stock.'), errors.preorder);
+  const preSwitch = makeSwitch('Allow pre-orders when sold out', draft.preorder_enabled, (on) => { draft.preorder_enabled = on; preBox.hidden = !on; markDirty(); if (on) readyField.control.focus(); });
+  editorBox.append(card('Availability', active.row, available.row, preSwitch.row, preBox, el('div', { className: 'lead-row' }, leadLine, editLead)));
 
   // ----- sticky Save and Cancel -----
   const saveBtn = el('button', { type: 'button', className: 'btn' }, 'Save');
@@ -393,13 +407,14 @@ async function edit(id, guide = null) {
     Object.values(errors).forEach((e) => { e.textContent = ''; });
     const priceText = draft.price.trim();
     const pence = priceText === '' ? null : poundsToPence(priceText);
-    const fields = { id: product?.id, name: draft.name, kind: draft.kind, unit_label: draft.unit_label, price_pence: pence, category_id: draft.category_id || null, active: draft.active, available: draft.available,
+    const fields = { id: product?.id, name: draft.name, kind: draft.kind, unit_label: draft.unit_label, price_pence: pence, category_id: draft.category_id || null, preorder_enabled: draft.preorder_enabled, preorder_ready_date: draft.preorder_ready_date || null, preorder_limit: draft.preorder_limit === '' ? null : Number(draft.preorder_limit), active: draft.active, available: draft.available,
       photo_path: pending ? 'pending.webp' : draft.photo_path, photo_alt: draft.photo_alt, ingredients: draft.ingredients, allergen_ids: draft.allergen_ids, allergen_note: draft.allergen_note,
       allergens_checked_at: draft.checked ? (draft.infoChanged || !draft.checkedAt ? new Date().toISOString() : draft.checkedAt) : null };
     let first = null;
     const fail = (key, text) => { showError(key, text); first ||= errors[key]; };
     if (priceText !== '' && pence === null) fail('price', 'Enter a price of £0 or more, for example 10 or 10.50.');
     else { const e = validateProduct(fields); if (e) fail(/price/i.test(e) ? 'price' : 'name', e); }
+    const pre = validatePreorder(fields, todayIso); if (pre) fail('preorder', pre);
     const pe = validatePhoto({ photo_path: fields.photo_path, photo_alt: draft.photo_alt }); if (pe) fail('photo', pe);
     const ie = validateIngredients({ ingredients: draft.ingredients, allergen_ids: draft.allergen_ids, allergen_note: draft.allergen_note }); if (ie) fail('allergens', ie);
     const ce = validateChecked({ active: draft.active, checked: draft.checked }); if (ce) fail('checked', ce);

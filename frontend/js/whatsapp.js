@@ -21,6 +21,11 @@ export function buildMessage({ orderNumber, lines, totalPence, pickup, name, pho
   return out.join('\n');
 }
 
+// Text message link. "?&body=" is the form that works on both iPhone and Android; the number is in international form with a +.
+export const buildSmsLink = (number, message) => `sms:+${number}?&body=${encodeURIComponent(message)}`;
+// The WhatsApp app link: opens the app straight from a tap, with no wa.me page left behind in the browser.
+export const buildAppLink = (number, message) => `whatsapp://send?phone=${number}&text=${encodeURIComponent(message)}`;
+
 export const buildLink = (number, message) => `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 
 // Builds the link, trimming the notes first if the encoded link would be too long.

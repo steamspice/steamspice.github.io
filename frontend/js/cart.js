@@ -1,4 +1,5 @@
 // Cart: slug, quantity and chosen option ids only, in localStorage (strictly necessary, no cookies). Prices come from data/products.json.
+import { preorderActive } from './preorder.js';
 import { siteConfig } from './site-config.js';
 
 const KEY = 'ss-cart';
@@ -70,14 +71,16 @@ export function buildLines(items, products, maxQty = siteConfig.limits.maxQtyPer
     const chosen = options.map((id) => all.find((o) => o.id === id)).filter(Boolean);
     const customised = chosen.some((o) => !o.is_default);
     const stock = product && Number.isInteger(product.stock_quantity) ? product.stock_quantity : null;
-    const usesStock = stock !== null && !customised; // customised lines are made to order
+    // Pre-order (D-071): stock 0, the switch on and a ready date that has not passed. Such a line never uses stock.
+    const preorder = preorderActive(product);
+    const usesStock = stock !== null && !customised && !preorder; // customised lines are made to order
     const soldOut = usesStock && stock === 0;
     const unavailable = !product || !product.available || product.price_pence == null || soldOut;
     const unitPence = unavailable ? 0 : product.price_pence + chosen.reduce((sum, o) => sum + (o.price_delta_pence || 0), 0);
     return {
-      slug, qty, options, product, unavailable, soldOut, customised, unitPence,
+      slug, qty, options, product, unavailable, soldOut, customised, unitPence, preorder, readyFrom: preorder ? product.preorder_ready_date : null,
       optionText: chosen.map((o) => o.label).join(', '),
-      maxQty: usesStock ? Math.min(stock, maxQty) : maxQty,
+      maxQty: usesStock ? Math.min(stock, maxQty) : preorder && product.preorder_limit ? Math.min(product.preorder_limit, maxQty) : maxQty,
       overStock: usesStock && qty > stock,
       linePence: unavailable ? 0 : unitPence * qty,
     };

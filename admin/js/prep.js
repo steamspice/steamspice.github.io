@@ -52,6 +52,10 @@ async function render() {
     const opts = prep.options.filter((o) => o.slug === p.slug);
     if (opts.length) out.append(el('ul', { className: 'prep-options' }, ...opts.map((o) => el('li', {}, el('span', {}, o.label), el('span', {}, `×${o.qty}`)))));
   }
+  if (prep.preorders && prep.preorders.length) {
+    out.append(el('h3', { className: 'prep-day' }, 'Pre-orders (not from stock)'));
+    for (const p of prep.preorders) out.append(el('div', { className: 'prep-product' }, el('strong', {}, p.name, p.unit_label ? el('span', { className: 'muted' }, ` (${p.unit_label})`) : null, el('span', { className: 'muted' }, ` · ready from ${shortDate(p.ready_from)}`)), el('span', { className: 'prep-qty' }, `×${p.qty}`)));
+  }
   if (prep.customised.length) {
     out.append(el('h3', { className: 'prep-day' }, 'Customised orders'));
     out.append(el('ul', { className: 'prep-custom' }, ...prep.customised.map((c) => el('li', {}, `${c.order_number}, ${c.name}: ${c.qty} × ${c.product}${c.options.length ? ` (${c.options.join(', ')})` : ''}${end !== start ? `, ${shortDate(c.pickup_date)}` : ''}${c.pickup_time ? ` ${c.pickup_time}` : ''}`))));

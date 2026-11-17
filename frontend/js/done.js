@@ -1,4 +1,5 @@
 // Done page: the order as a paper receipt, from sessionStorage. Nothing opens automatically (D-036).
+import { shortDateLabel } from './pickup.js';
 import './menu.js';
 import { formatPrice, updateHeaderCount } from './cart.js';
 
@@ -28,7 +29,7 @@ if (order) {
     const name = document.createElement('span');
     name.className = 'receipt-name';
     name.textContent = l.name;
-    const small = [l.unitLabel, l.optionText ? `Customised: ${l.optionText}` : ''].filter(Boolean).join(' \u00b7 ');
+    const small = [l.unitLabel, l.optionText ? `Customised: ${l.optionText}` : '', l.preorderReadyFrom ? `Pre-order, ready from ${shortDateLabel(l.preorderReadyFrom)}` : ''].filter(Boolean).join(' \u00b7 ');
     if (small) {
       const sub = document.createElement('small');
       sub.textContent = small;
@@ -52,7 +53,7 @@ if (order) {
     const text = [
       'STEAM & SPICE', 'Order receipt', `No. ${number}`, order.placedAt ? placedText(order.placedAt) : '', '-'.repeat(w),
       `Name: ${order.name || '-'}`, `Pickup: ${order.pickup || 'To be agreed'}`, '-'.repeat(w),
-      ...order.lines.flatMap((l) => [row(`${l.qty} x ${l.name}`, formatPrice(l.linePence)), ...(l.optionText ? [`   Customised: ${l.optionText}`] : [])]),
+      ...order.lines.flatMap((l) => [row(`${l.qty} x ${l.name}`, formatPrice(l.linePence)), ...(l.optionText ? [`   Customised: ${l.optionText}`] : []), ...(l.preorderReadyFrom ? [`   Pre-order, ready from ${shortDateLabel(l.preorderReadyFrom)}`] : [])]),
       '-'.repeat(w), row('TOTAL', formatPrice(order.totalPence)), '-'.repeat(w),
       'Pickup only. Pay cash when you pick up.', 'Not confirmed until we message you.', '',
     ].filter((x, i) => x !== '' || i > 4).join('\n');

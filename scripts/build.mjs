@@ -101,8 +101,8 @@ const CHUTNEY_FIGURE = '<figure class="sauce-figure"><img class="photo-frame sau
 }
 
 if (products.length) {
-  const slim = products.map(({ slug, name, kind, unit_label, price_pence, available, pending, photo, stock_quantity, stock_pending, option_groups }) =>
-    ({ slug, name, kind, unit_label, price_pence, available, photo: photo ?? null, stock_quantity: stock_quantity ?? null, option_groups: option_groups ?? [], ...(pending ? { pending: true } : {}), ...(stock_pending ? { stock_pending: true } : {}) }));
+  const slim = products.map(({ slug, name, kind, unit_label, price_pence, available, pending, photo, stock_quantity, stock_pending, option_groups, preorder_enabled, preorder_ready_date, preorder_limit }) =>
+    ({ slug, name, kind, unit_label, price_pence, available, photo: photo ?? null, preorder_enabled: Boolean(preorder_enabled), preorder_ready_date: preorder_ready_date ?? null, preorder_limit: preorder_limit ?? null, stock_quantity: stock_quantity ?? null, option_groups: option_groups ?? [], ...(pending ? { pending: true } : {}), ...(stock_pending ? { stock_pending: true } : {}) }));
   await writeFile(join(dist, 'data/products.json'), JSON.stringify(slim, null, 2) + '\n');
 }
 

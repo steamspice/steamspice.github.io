@@ -3,7 +3,7 @@
 // and the signed-in admin's own session; the database checks is_admin() on every request.
 import { siteConfig } from '../../js/site-config.js';
 import { prepList as computePrep } from '../../js/mock-backend.js';
-import { SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateGroup, validateIngredients, validatePhoto, validateProduct, validateRule, validateSlot } from '../../js/admin-rules.js';
+import { SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from '../../js/admin-rules.js';
 
 import { backoffSeconds, LIVE_FLAG_AFTER_SECONDS, recordLive } from './live-feed.js';
 
@@ -43,7 +43,7 @@ const productRow = (r, library = [], categoryNames = new Map()) => {
     .map((g) => ({ id: g.id, label: g.name, kind: g.kind, source: g.product_ids.includes(r.id) ? 'product' : 'category', sort_order: g.sort_order, active: g.active, options: g.options }))
     .sort((a, b) => a.sort_order - b.sort_order);
   return {
-    id: r.id, slug: r.slug, name: r.name, kind: r.kind, category: categoryNames.get(r.category_id) ?? null, category_id: r.category_id ?? null, unit_label: r.unit_label || '', price_pence: r.price_pence, available: r.available, active: r.active,
+    id: r.id, slug: r.slug, name: r.name, kind: r.kind, category: categoryNames.get(r.category_id) ?? null, category_id: r.category_id ?? null, preorder_enabled: Boolean(r.preorder_enabled), preorder_ready_date: r.preorder_ready_date ?? null, preorder_limit: r.preorder_limit ?? null, unit_label: r.unit_label || '', price_pence: r.price_pence, available: r.available, active: r.active,
     sort_order: r.sort_order, photo_path: r.photo_path, photo_alt: r.photo_alt || '', ingredients: (r.product_ingredients || []).slice().sort((a, b) => a.sort_order - b.sort_order).map((i) => i.name), allergen_ids: (r.product_allergens || []).map((x) => x.allergen_id), allergen_note: r.allergen_note || '', allergens_checked_at: r.allergens_checked_at ?? null,
     stock_quantity: stock ? stock.quantity : null,
     option_groups: effective,
@@ -150,12 +150,13 @@ export const supabaseApi = {
   async saveProduct(input) {
     const sb = await loadClient();
     const merged = { ...input, price_pence: input.price_pence ?? null };
-    const error = validateProduct(merged) || validatePhoto(merged) || validateIngredients({ ingredients: input.ingredients || [], allergen_ids: input.allergen_ids || [], allergen_note: input.allergen_note }) || validateChecked({ active: Boolean(input.active), checked: Boolean(input.allergens_checked_at) });
+    const error = validateProduct(merged) || validatePreorder(merged, new Date().toISOString().slice(0, 10)) || validatePhoto(merged) || validateIngredients({ ingredients: input.ingredients || [], allergen_ids: input.allergen_ids || [], allergen_note: input.allergen_note }) || validateChecked({ active: Boolean(input.active), checked: Boolean(input.allergens_checked_at) });
     if (error) refuse(error);
     const fields = {
       name: String(input.name).trim(), kind: input.kind, unit_label: String(input.unit_label || '').trim(), price_pence: merged.price_pence,
       available: Boolean(input.available), active: Boolean(input.active), photo_path: input.photo_path || null, photo_alt: String(input.photo_alt || '').trim() || null,
       allergen_note: String(input.allergen_note || '').trim() || null, allergens_checked_at: input.allergens_checked_at || null, category_id: input.category_id || null,
+      preorder_enabled: Boolean(input.preorder_enabled), preorder_ready_date: input.preorder_enabled ? input.preorder_ready_date : null, preorder_limit: input.preorder_limit ? Number(input.preorder_limit) : null,
     };
     let id = input.id;
     if (id) unwrap(await sb.from('products').update(fields).eq('id', id));
