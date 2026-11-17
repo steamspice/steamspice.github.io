@@ -1,5 +1,7 @@
 # Step 4l — Catalogue: categories, reusable options, allergens by product (decision D-065)
 
+> **Update (D-073):** Step 4s runs before this step. After 4s, "Leave out" choices come from ingredients (removable ingredients), not from option groups, and per-option prices are retired (one customisation fee instead). So in the Options library do not build a leave-out group type, hide the per-option price field, and keep the **Ingredients** library screen from 4s in the Manage menu next to Categories, Options and Allergens.
+
 Prerequisite: Step 4n is merged (not 4k alone). Merge `origin/main` first. Read `CLAUDE.md`, D-028, D-031, D-046, D-052, D-062, D-065, `backend/README.md`, the migrations (`0001` option tables, `0002` order functions, `0007` allergens), `place_order` and `set_order_status`, `scripts/build.mjs` and the shop code that renders options. Owner rules for the session: write the code, run the build once and only the tests for files you changed plus the database tests (they run on a local PostgreSQL; run them once because this step changes the order function); you cannot reach Supabase, so say what is and is not checked.
 
 ## Goal
