@@ -150,7 +150,6 @@ for (const file of htmlFiles) {
     const pageTitle = (html.match(/<title>([\s\S]*?)<\/title>/i) || [])[1]; const pageDesc = (html.match(/<meta name="description" content="([^"]*)"/i) || [])[1];
     if (pageTitle) seo.push(`<meta name="twitter:title" content="${pageTitle}">`);
     if (pageDesc) seo.push(`<meta name="twitter:description" content="${pageDesc}">`);
-    if (rel === 'about.html') seo.push(`<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'AboutPage', name: 'Our story', url: urlFor(rel), about: { '@type': 'Organization', name: ORG.name, url: `${siteUrl}/` } })}</script>`);
     if (rel === 'index.html') {
       seo.push(`<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'Organization', name: ORG.name, url: `${siteUrl}/`, logo: `${siteUrl}/assets/img/logo-full-960.webp`, telephone: ORG.telephone })}</script>`);
     }
