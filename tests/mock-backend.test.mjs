@@ -23,15 +23,24 @@ test('a standard order takes stock; a customised line does not', () => {
   assert.equal(stock(s, 'chicken-momo'), 21);
 });
 
-test('prices come from the data: options add their price change, unknown or doubled options are refused', () => {
+test('prices come from the data: option prices are retired, one flat fee per customised line, bad options and non-removable ingredients are refused', () => {
   const s = fresh();
-  s.products.find((p) => p.slug === 'veg-momo').option_groups[1].options.find((o) => o.id === 'hot').price_delta_pence = 50;
-  const r = place(s, { items: [{ slug: 'veg-momo', qty: 2, options: ['hot'] }] });
-  assert.equal(r.totalPence, 2 * 1050);
-  assert.equal(r.order.items[0].customised, true);
+  s.products.find((p) => p.slug === 'veg-momo').option_groups[0].options.find((o) => o.id === 'hot').price_delta_pence = 50; // ignored
+  let r = place(s, { items: [{ slug: 'veg-momo', qty: 2, options: ['hot'] }] });
+  assert.equal(r.totalPence, 2000); assert.equal(r.order.items[0].customised, true);
+  s.settings.customisation_fee_pence = 150;
+  r = place(s, { items: [{ slug: 'chicken-momo', qty: 3, options: ['hot'], without: ['onion', 'coriander'] }] });
+  assert.equal(r.totalPence, 3150); // quantity 3 with three changes pays the fee once
+  assert.deepEqual(r.order.items[0].without, ['Onion', 'Coriander']);
+  r = place(s, { items: [{ slug: 'chicken-momo', qty: 1, without: ['onion'] }, { slug: 'veg-momo', qty: 1, options: ['hot'] }] });
+  assert.equal(r.totalPence, 2300); // two products each pay the fee once
+  r = place(s, { items: [{ slug: 'veg-momo', qty: 1 }] });
+  assert.equal(r.totalPence, 1000); // not customised: no fee
+  assert.equal(code(() => place(s, { items: [{ slug: 'veg-momo', qty: 1, without: ['nope'] }] })), 'ingredient');
   assert.equal(code(() => place(s, { items: [{ slug: 'veg-momo', qty: 1, options: ['nonsense'] }] })), 'option');
   assert.equal(code(() => place(s, { items: [{ slug: 'veg-momo', qty: 1, options: ['mild', 'hot'] }] })), 'option');
-  assert.equal(code(() => place(s, { items: [{ slug: 'chicken-momo', qty: 1, options: ['no-such'] }], pickupDate: null })), 'option');
+  s.settings.customisation_fee_pence = 0;
+  assert.equal(place(s, { items: [{ slug: 'veg-momo', qty: 1, without: ['onion'] }] }).totalPence, 1000);
 });
 
 test('order numbers are day then month with a counter that restarts each day', () => {
@@ -153,8 +162,8 @@ test('allergens are an editable list: usage, rename, delete removes it from prod
   const milk = list.find((a) => a.name === 'Milk');
   saveProduct(s, { id: 'chicken-momo', name: 'Frozen chicken momo', kind: 'pack', unit_label: '40 pieces', price_pence: 1000, active: true, available: true, allergen_ids: [milk.id], ingredients: ['Chicken', 'Onion'], allergens_checked_at: '2026-11-13T10:00:00Z' });
   assert.equal(allergenUsage(s, milk.id), 1);
-  assert.deepEqual(adminProducts(s).find((p) => p.id === 'chicken-momo').ingredients, ['Chicken', 'Onion']);
-  assert.deepEqual(ingredientNames(s), ['Chicken', 'Onion']);
+  assert.deepEqual(adminProducts(s).find((p) => p.id === 'chicken-momo').ingredients.map((i) => i.name), ['Chicken', 'Onion']);
+  assert.deepEqual(ingredientNames(s), ['Chicken', 'Coriander', 'Onion']);
   assert.throws(() => saveAllergen(s, { name: 'MILK' }), /already in the list/);
   saveAllergen(s, { id: milk.id, name: 'Dairy milk' });
   assert.equal(listAllergens(s).find((a) => a.id === milk.id).name, 'Dairy milk');

@@ -68,6 +68,13 @@ export const mockApi = {
   allergenUsage: (id) => store.allergenUsage(id),
   deleteAllergen: (id) => store.deleteAllergen(id),
   ingredientNames: () => store.ingredientNames(),
+  listIngredients: () => store.listIngredients(),
+  saveIngredient: (x) => store.saveIngredient(x),
+  deleteIngredient: (id) => store.deleteIngredient(id),
+  // The demo only checks the current password; it cannot change the fixed demo login, and nothing is stored.
+  async changePassword(current) {
+    if (!DEMO_ACCOUNTS.some((a) => a.password === current)) throw new Error('Your current password is not right.');
+  },
   getNotice: () => store.getNotice(),
   saveNotice: (n) => store.saveNotice(n),
   async createManualOrder(order) { // the same call the database function answers

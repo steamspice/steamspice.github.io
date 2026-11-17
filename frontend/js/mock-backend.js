@@ -5,7 +5,7 @@ import { includedLine } from './chutney.js';
 import { getPickupOptions, noticeText, ukParts } from './pickup.js';
 import { siteConfig } from './site-config.js';
 import { toWhatsAppNumber } from './whatsapp.js';
-import { cleanChutneyTiers, validateChutneyTiers, SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateWindows, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from './admin-rules.js';
+import { CUSTOMISATION_NOTE_MAX, INGREDIENT_MAX, LIMITS, cleanChutneyTiers, cleanTag, validateChutneyTiers, SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateWindows, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from './admin-rules.js';
 
 export const STORE_KEY = 'ss-store-v2';
 export const STATUSES = ['new', 'confirmed', 'ready', 'collected', 'cancelled'];
@@ -55,7 +55,7 @@ export function fullPickupDates(state, from, to) {
 // Public: what the cart needs to know.
 export function publicState(state) {
   const s = state.settings;
-  return { orderingOpen: s.ordering_open, closedMessage: s.ordering_closed_message, fullDates: fullPickupDates(state), customMinLeadHours: s.custom_min_lead_hours, chutneyTiers: s.included_chutney_tiers || [] };
+  return { orderingOpen: s.ordering_open, closedMessage: s.ordering_closed_message, fullDates: fullPickupDates(state), customMinLeadHours: s.custom_min_lead_hours, chutneyTiers: s.included_chutney_tiers || [], customisationFeePence: s.customisation_fee_pence || 0, customisationNote: s.customisation_note || '' };
 }
 
 // Orders for the admin list. Orders without a pickup date are always included.
@@ -101,7 +101,7 @@ export function prepList(state, from, to) {
         entry.qty += l.qty;
         options.set(key, entry);
       }
-      if (l.customised) customised.push({ order_number: o.order_number, name: o.customer_name, pickup_date: o.pickup_date, pickup_time: o.pickup_time, qty: l.qty, product: l.name, options: l.options.map((x) => x.label) });
+      if (l.customised) customised.push({ order_number: o.order_number, name: o.customer_name, pickup_date: o.pickup_date, pickup_time: o.pickup_time, qty: l.qty, product: l.name, options: [...l.options.map((x) => x.label), ...(l.without || []).map((w) => `without ${w.toLowerCase()}`)] });
     }
   }
   return { orders: orders.length, products: [...products.values()], preorders: [...preorders.values()], options: [...options.values()], customised };
@@ -145,6 +145,13 @@ function buildLine(state, raw, now = new Date()) {
   if (!(qty >= 1 && qty <= limits.maxQtyPerItem)) throw new RuleError('quantity', `Choose between 1 and ${limits.maxQtyPerItem} of each item.`);
   const ids = [...new Set(raw.options || [])];
   const chosen = [];
+  // ingredients left out (D-073): only removable ingredients of this product; the names are kept on the line
+  const without = [];
+  for (const id of new Set(raw.without || [])) {
+    const ing = ingredientsOf(product).find((i) => i.id === id && i.removable);
+    if (!ing) throw new RuleError('ingredient', 'Only ingredients marked as removable can be left out.');
+    without.push(ing.name);
+  }
   const perGroup = new Map();
   for (const id of ids) {
     const group = (product.option_groups || []).find((g) => g.active !== false && (g.options || []).some((o) => o.id === id && o.active !== false));
@@ -154,14 +161,16 @@ function buildLine(state, raw, now = new Date()) {
     if (group.kind === 'single' && perGroup.get(group.id) > 1) throw new RuleError('option', `Choose only one ${group.label.toLowerCase()}.`);
     chosen.push({ group: group.label, label: option.label, price_delta_pence: option.price_delta_pence || 0, is_default: Boolean(option.is_default) });
   }
-  const unit = product.price_pence + chosen.reduce((sum, o) => sum + o.price_delta_pence, 0);
+  const unit = product.price_pence; // option prices are retired: one flat customisation fee instead
+  const customised = chosen.some((o) => !o.is_default) || without.length > 0;
   // Pre-order (D-071): stock 0, the switch on, a ready date that has not passed. Such a line never touches stock.
   const preorder = product.stock_quantity === 0 && product.preorder_enabled && product.preorder_ready_date && product.preorder_ready_date >= ukToday(now);
   return {
     is_preorder: Boolean(preorder), ready_from: preorder ? product.preorder_ready_date : null,
     slug: product.slug, name: product.name, unit_label: product.unit_label, qty, unit_price_pence: unit,
-    options: chosen.map(({ group, label, price_delta_pence }) => ({ group, label, price_delta_pence })),
-    customised: chosen.some((o) => !o.is_default),
+    options: chosen.map(({ group, label }) => ({ group, label, price_delta_pence: 0 })),
+    without, customisation_fee_pence: customised ? (state.settings.customisation_fee_pence || 0) : 0,
+    customised,
   };
 }
 
@@ -236,7 +245,7 @@ function insertOrder(state, { lines, name, phone, notes, pickupDate, pickupTime,
     order_number: nextNumber(state, orderDate), order_date: orderDate,
     pickup_date: pickupDate || null, pickup_time: pickupTime || null,
     customer_name: name || null, customer_phone: phone || null, notes: notes || null,
-    items: lines, total_pence: lines.reduce((sum, l) => sum + l.unit_price_pence * l.qty, 0),
+    items: lines, total_pence: lines.reduce((sum, l) => sum + l.unit_price_pence * l.qty + (l.customisation_fee_pence || 0), 0),
     status, source, sample, stock_taken: false, created_at: now.toISOString(), updated_at: now.toISOString(),
   };
   if (status !== 'cancelled') takeStock(state, order);
@@ -280,6 +289,12 @@ export function saveSettings(state, patch) {
       if (value === null && spec.optional) state.settings[key] = null;
       else if (Number.isInteger(value) && value >= spec.min && value <= spec.max) state.settings[key] = value;
       else throw new RuleError('setting', `${spec.label}: enter a number from ${spec.min} to ${spec.max}.`);
+    } else if (key === 'customisation_fee_pence') {
+      if (!(Number.isInteger(value) && value >= 0 && value <= LIMITS.maxPence)) throw new RuleError('setting', 'Customisation fee: enter an amount from £0 to £1,000.');
+      state.settings.customisation_fee_pence = value;
+    } else if (key === 'customisation_note') {
+      const note = String(value ?? '').trim(); if (note.length > CUSTOMISATION_NOTE_MAX) throw new RuleError('setting', `The note can be at most ${CUSTOMISATION_NOTE_MAX} characters.`);
+      state.settings.customisation_note = note;
     } else if (key === 'included_chutney_tiers') {
       const problem = validateChutneyTiers(value); if (problem) throw new RuleError('setting', problem);
       state.settings.included_chutney_tiers = cleanChutneyTiers(value);
@@ -313,14 +328,14 @@ function addSampleOrders(state, now) {
   const free = { settings: { min_lead_hours: 0, max_days_ahead: state.settings.max_days_ahead }, rules: state.pickup.rules, exceptions: state.pickup.exceptions };
   const dates = getPickupOptions(free, now).map((d) => d.date);
   const [d1, d2] = [dates[0] || null, dates[1] || dates[0] || null];
-  const line = (slug, qty, optionIds = []) => buildLine(state, { slug, qty, options: optionIds });
+  const line = (slug, qty, optionIds = [], without = []) => buildLine(state, { slug, qty, options: optionIds, without });
   const samples = [
     { name: 'Sample: Asha', phone: '07700 900101', status: 'new', date: d1, time: '10:30', lines: [line('chicken-momo', 2), line('veg-momo', 1)], notes: '' },
-    { name: 'Sample: Bikash', phone: '07700 900102', status: 'new', date: d1, time: '12:15', lines: [line('chicken-momo', 2, ['no-onion', 'hot']), line('chutney-pot', 1)], notes: 'Please ring on arrival.' },
+    { name: 'Sample: Bikash', phone: '07700 900102', status: 'new', date: d1, time: '12:15', lines: [line('chicken-momo', 2, ['hot'], ['onion']), line('chutney-pot', 1)], notes: 'Please ring on arrival.' },
     { name: 'Sample: Chandra', phone: '07700 900103', status: 'confirmed', date: d1, time: '14:00', lines: [line('veg-momo', 3)], notes: '' },
     { name: 'Sample: Dipa', phone: '07700 900104', status: 'ready', date: d2, time: '11:00', lines: [line('chicken-momo', 1), line('chutney-pot', 2)], notes: '' },
     { name: 'Sample: Eshan', phone: '07700 900105', status: 'cancelled', date: d2, time: '16:30', lines: [line('veg-momo', 2)], notes: '' },
-    { name: 'Sample: Farida', phone: '07700 900106', status: 'new', date: null, time: null, lines: [line('veg-momo', 1, ['no-coriander'])], notes: 'No date chosen yet.' },
+    { name: 'Sample: Farida', phone: '07700 900106', status: 'new', date: null, time: null, lines: [line('veg-momo', 1, [], ['coriander'])], notes: 'No date chosen yet.' },
   ];
   samples.forEach((x, i) => insertOrder(state, {
     lines: x.lines, name: x.name, phone: x.phone, notes: x.notes, pickupDate: x.date, pickupTime: x.time, source: 'website',
@@ -345,11 +360,53 @@ export function settingsWithDefaults(state) {
   return { order_prefix: ORDER_PREFIX, max_qty_per_item: siteConfig.limits.maxQtyPerItem, wa_template_collected: DEFAULT_TEMPLATES.collected, ...clone(state.settings) };
 }
 
+// ---------- ingredients (D-073): a library, and per product a list of { id, name, removable } ----------
+export const ingredientsOf = (p) => (p.ingredients || []).map((i) => (typeof i === 'string' ? { id: slugify(i), name: i, removable: false } : i));
+export function ensureIngredients(state) {
+  if (state.ingredient_library) return;
+  state.ingredient_library = [];
+  for (const p of state.products) {
+    p.ingredients = ingredientsOf(p).map((i) => {
+      let lib = state.ingredient_library.find((x) => x.name.toLowerCase() === i.name.toLowerCase());
+      if (!lib) { lib = { id: i.id || slugify(i.name), name: i.name, sort_order: state.ingredient_library.length + 1 }; state.ingredient_library.push(lib); }
+      return { id: lib.id, name: lib.name, removable: Boolean(i.removable) };
+    });
+  }
+}
+const libraryIngredient = (state, name) => {
+  ensureIngredients(state);
+  const clean = cleanTag(name);
+  let lib = state.ingredient_library.find((x) => x.name.toLowerCase() === clean.toLowerCase());
+  if (!lib) { lib = { id: `i-${RANDOM_ID()}`, name: clean, sort_order: Math.max(0, ...state.ingredient_library.map((x) => x.sort_order)) + 1 }; state.ingredient_library.push(lib); }
+  return lib;
+};
+export const listIngredients = (state) => (ensureIngredients(state), clone(state.ingredient_library).sort((a, b) => a.sort_order - b.sort_order).map((i) => ({ ...i, product_count: state.products.filter((p) => ingredientsOf(p).some((x) => x.id === i.id)).length })));
+export function saveIngredient(state, { id, name }) {
+  ensureIngredients(state);
+  const text = cleanTag(name);
+  if (!text) fail('Enter a name for the ingredient.');
+  if (text.length > INGREDIENT_MAX) fail(`An ingredient can be at most ${INGREDIENT_MAX} characters.`);
+  if (state.ingredient_library.some((i) => i.id !== id && i.name.toLowerCase() === text.toLowerCase())) fail('That ingredient is already in the list.');
+  if (!id) { state.ingredient_library.push({ id: `i-${RANDOM_ID()}`, name: text, sort_order: Math.max(0, ...state.ingredient_library.map((x) => x.sort_order)) + 1 }); touched(state); return; }
+  const lib = state.ingredient_library.find((i) => i.id === id) || fail('That ingredient was not found.', 'not_found');
+  lib.name = text; // renaming reaches every product
+  for (const p of state.products) for (const i of ingredientsOf(p)) if (i.id === id) i.name = text;
+  touched(state);
+}
+export function deleteIngredient(state, id) {
+  ensureIngredients(state);
+  const used = state.products.filter((p) => ingredientsOf(p).some((i) => i.id === id)).length;
+  state.ingredient_library = state.ingredient_library.filter((i) => i.id !== id);
+  for (const p of state.products) p.ingredients = ingredientsOf(p).filter((i) => i.id !== id);
+  touched(state);
+  return used;
+}
+
 export function adminProducts(state) {
   return state.products.map((p, i) => ({
     id: p.slug, slug: p.slug, name: p.name, kind: p.kind, category: (state.categories || []).find((x) => x.id === p.category_id)?.name ?? null, category_id: p.category_id ?? null, preorder_enabled: Boolean(p.preorder_enabled), preorder_ready_date: p.preorder_ready_date ?? null, preorder_limit: p.preorder_limit ?? null, unit_label: p.unit_label || '',
     price_pence: p.price_pence ?? null, available: p.available !== false, active: p.active !== false, sort_order: p.sort_order ?? i + 1,
-    photo_path: p.photo_path ?? p.photo ?? null, photo_alt: p.photo_alt ?? '', ingredients: [...(p.ingredients || [])], allergen_ids: [...(p.allergen_ids || [])], allergen_note: p.allergen_note ?? '', allergens_checked_at: p.allergens_checked_at ?? null,
+    photo_path: p.photo_path ?? p.photo ?? null, photo_alt: p.photo_alt ?? '', ingredients: ingredientsOf(p).map((i) => ({ ...i })), allergen_ids: [...(p.allergen_ids || [])], allergen_note: p.allergen_note ?? '', allergens_checked_at: p.allergens_checked_at ?? null,
     stock_quantity: p.stock_quantity ?? null,
     option_groups: (p.option_groups || []).map((g, gi) => ({
       id: g.id, label: g.label, kind: g.kind, source: g.source || 'product', sort_order: g.sort_order ?? gi + 1, active: g.active !== false,
@@ -378,7 +435,7 @@ export function saveProduct(state, input) {
   Object.assign(p, {
     name: String(input.name).trim(), kind: input.kind, unit_label: String(input.unit_label || '').trim(), price_pence: price, category_id: input.category_id || undefined, preorder_enabled: Boolean(input.preorder_enabled), preorder_ready_date: input.preorder_enabled ? input.preorder_ready_date : (input.preorder_ready_date || null), preorder_limit: input.preorder_limit || null,
     available: Boolean(input.available), active: Boolean(input.active), photo_path: input.photo_path || null, photo_alt: String(input.photo_alt || '').trim(),
-    ingredients: (input.ingredients || []).map((t) => String(t).trim().replace(/\s+/g, ' ')), allergen_ids: [...(input.allergen_ids || [])], allergen_note: String(input.allergen_note || '').trim(), allergens_checked_at: input.allergens_checked_at || null,
+    ingredients: (input.ingredients || []).map((t) => { const lib = libraryIngredient(state, typeof t === 'string' ? t : t.name); return { id: lib.id, name: lib.name, removable: typeof t === 'object' && Boolean(t.removable) }; }), allergen_ids: [...(input.allergen_ids || [])], allergen_note: String(input.allergen_note || '').trim(), allergens_checked_at: input.allergens_checked_at || null,
   });
   if (p.photo_path) p.photo = p.photo_path;
   if (!input.category_id) delete p.category_id;
@@ -555,7 +612,7 @@ export function deleteAllergen(state, id) {
   touched(state);
 }
 // Ingredient names already used on any product (suggestions while typing).
-export const ingredientNames = (state) => [...new Set(state.products.flatMap((p) => p.ingredients || []))].sort((a, b) => a.localeCompare(b));
+export const ingredientNames = (state) => (ensureIngredients(state), state.ingredient_library).map((i) => i.name).sort((a, b) => a.localeCompare(b));
 
 // Notice banner (live on the public site without a rebuild)
 export const getNotice = (state) => ({ message: '', active: false, ...(state.notice || {}) });
@@ -590,6 +647,7 @@ export function createMock({ storage = null, loadSeed, now = () => new Date() } 
     let state = read();
     if (!state || state.version !== 1) { state = buildInitialState(await loadSeed(), now()); write(state); }
     if (!state.library) { ensureCatalogue(state); write(state); }
+    if (!state.ingredient_library) { ensureIngredients(state); write(state); }
     return state;
   };
   // Runs a change on the state and saves it only when the change succeeds.
@@ -609,6 +667,9 @@ export function createMock({ storage = null, loadSeed, now = () => new Date() } 
     saveProduct: (p) => change((s) => saveProduct(s, p)),
     reorderProducts: (ids) => change((s) => reorderProducts(s, ids)),
     setStock: (id, q) => change((s) => setStock(s, id, q)),
+    listIngredients: () => query((s) => listIngredients(s)),
+    saveIngredient: (x) => change((s) => saveIngredient(s, x)),
+    deleteIngredient: (id) => change((s) => deleteIngredient(s, id)),
     listCategories: () => query((s) => listCategories(s)),
     saveCategory: (x) => change((s) => saveCategory(s, x)),
     reorderCategories: (ids) => change((s) => reorderCategories(s, ids)),

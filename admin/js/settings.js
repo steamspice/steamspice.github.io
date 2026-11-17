@@ -6,7 +6,7 @@ import { api } from './shell.js';
 import { readLive } from './live-feed.js';
 import { clearLogin } from './session.js';
 import { confirmDialog, el, field, makeSwitch, toast } from './dom.js';
-import { CHUTNEY_LABEL_MAX, CHUTNEY_TIERS_MAX, SETTING_FIELDS, cleanChutneyTiers, hoursHint, parseSettings, validateChutneyTiers } from '../../js/admin-rules.js';
+import { CUSTOMISATION_NOTE_MAX, PASSWORD_MIN, formatMoney, penceToPounds, poundsToPence, CHUTNEY_LABEL_MAX, CHUTNEY_TIERS_MAX, SETTING_FIELDS, cleanChutneyTiers, hoursHint, parseSettings, validateChutneyTiers } from '../../js/admin-rules.js';
 import { mountAllergenManager, LEGAL_REMINDER } from './allergens.js';
 import { askNotificationPermission, notificationState, playSoftSound, setSound, soundOn } from './alerts.js';
 
@@ -38,6 +38,8 @@ const SECTIONS = [
     summary: () => (notice.active ? 'Site banner is showing' : 'Site banner is off'), build: buildNotices },
   { key: 'backup', title: 'Backup and privacy', icon: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z',
     summary: () => 'Weekly export and customer data', build: buildBackup },
+  { key: 'account', title: 'Account', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z|M4.5 20a7.5 7.5 0 0 1 15 0',
+    summary: () => 'Change your password', build: buildAccount },
   { key: 'app', title: 'App', icon: 'M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z|M11 18h2',
     summary: () => 'Home screen, alerts, live feed, log out', build: buildApp },
 ];
@@ -55,6 +57,11 @@ function buildOrdering() {
   fields.order_prefix = field('Order number prefix', 'text', { value: settings.order_prefix ?? 'SS', maxLength: 6, hint: 'Capital letters. Order numbers look like SS-1311-01.' });
   grid.append(fields.order_prefix.wrap);
   const errors = errorLine();
+  // the customisation fee (D-073): one flat amount, added once per customised item type
+  const fee = field('Customisation fee (£)', 'text', { value: settings.customisation_fee_pence ? penceToPounds(settings.customisation_fee_pence) : '', inputMode: 'decimal', hint: 'An extra amount added once for each customised item type in an order, however many changes. Leave empty for no extra charge.' });
+  const defaultNote = (p) => `Leaving something out or choosing a different option adds ${formatMoney(p)} once for this item, however many changes you make.`;
+  const feeNote = field('Note shown to customers (optional)', 'textarea', { value: settings.customisation_note ?? '', rows: 2, maxLength: CUSTOMISATION_NOTE_MAX, placeholder: defaultNote(poundsToPence(fee.control.value || '0') || 150), hint: 'Leave empty to use the shop\'s own wording, shown when a fee is set.' });
+  fee.control.addEventListener('input', () => { feeNote.control.placeholder = defaultNote(poundsToPence(fee.control.value || '0') || 0); });
   // the free chutney pot size list (D-072): "From N packs: label", empty by default
   let tiers = cleanChutneyTiers(settings.included_chutney_tiers).map((t) => ({ min_packs: String(t.min_packs), label: t.label }));
   const tierRows = el('div', { className: 'tier-rows' });
@@ -72,16 +79,18 @@ function buildOrdering() {
   const tierCard = card('Free chutney pot size', el('p', {}, 'One chutney pot comes free with every order that has a pack. If the pot size grows with the order, add the sizes here. Leave empty to show just "Free chutney pot".'), tierRows, el('div', { className: 'btn-row' }, addTier));
   return {
     nodes: [card('Pause ordering', el('p', {}, 'When paused, the public cart shows your message and cannot place an order. The pause is live at once when you save.'), pause.row, message.wrap),
-      card('Ordering rules', el('p', {}, 'How much notice you need, how far ahead customers can choose, and how many orders you take each day.'), grid, errors), tierCard],
-    values: () => ({ paused: pause.get(), message: message.control.value, tiers, ...Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.control.value])) }),
+      card('Ordering rules', el('p', {}, 'How much notice you need, how far ahead customers can choose, and how many orders you take each day.'), grid, errors), card('Customisation fee', fee.wrap, feeNote.wrap), tierCard],
+    values: () => ({ paused: pause.get(), message: message.control.value, tiers, fee: fee.control.value, feeNote: feeNote.control.value, ...Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.control.value])) }),
     async save() {
       errors.textContent = '';
       const result = parseSettings(Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.control.value])));
       if (!result.ok) { errors.textContent = Object.values(result.errors).join(' '); errors.scrollIntoView({ block: 'center', behavior: 'smooth' }); throw new Error('Check the numbers on this page.'); }
+      const feePence = fee.control.value.trim() === '' ? 0 : poundsToPence(fee.control.value.trim());
+      if (feePence === null) { errors.textContent = 'Enter the customisation fee as pounds, for example 1.50, or leave it empty.'; throw new Error('Check the customisation fee.'); }
       const rows = tiers.map((t) => ({ min_packs: Number(t.min_packs), label: t.label }));
       const problem = validateChutneyTiers(rows);
       if (problem) { errors.textContent = problem; throw new Error(problem); }
-      await api.saveSettings({ ...result.patch, ordering_open: !pause.get(), ordering_closed_message: message.control.value, included_chutney_tiers: rows });
+      await api.saveSettings({ ...result.patch, ordering_open: !pause.get(), ordering_closed_message: message.control.value, included_chutney_tiers: rows, customisation_fee_pence: feePence, customisation_note: feeNote.control.value });
     },
   };
 }
@@ -113,6 +122,32 @@ function buildBackup() {
   return { nodes: [card('Backup and privacy',
     el('p', {}, 'Export your orders as a CSV file every week (Orders, Export). The free plan has no automatic backups, so this file is your backup.'),
     el('p', {}, 'Customer names and phone numbers are personal data. Old customer details should be removed once the period you and the council decide has passed. A tool to remove details from old orders is planned; until then, do not share the exported files.'))] };
+}
+
+function buildAccount() {
+  const secret = (label) => {
+    const f = field(label, 'password', { autocomplete: label.startsWith('Current') ? 'current-password' : 'new-password' });
+    const toggle = el('button', { type: 'button', className: 'btn btn-secondary btn-small', 'aria-pressed': 'false', onclick: () => { const show = f.control.type === 'password'; f.control.type = show ? 'text' : 'password'; toggle.setAttribute('aria-pressed', String(show)); toggle.textContent = show ? 'Hide' : 'Show'; } }, 'Show');
+    f.wrap.append(toggle);
+    return f;
+  };
+  const current = secret('Current password'); const next = secret(`New password (at least ${PASSWORD_MIN} characters)`); const again = secret('New password again');
+  const who = el('p', {}, 'Signed in as ', el('strong', {}, '…'));
+  api.currentUser().then((u) => { who.querySelector('strong').textContent = u?.email || 'this account'; }).catch(() => {});
+  const problem = errorLine();
+  return {
+    nodes: [card('Change password', who, current.wrap, next.wrap, again.wrap, problem, el('p', { className: 'muted' }, 'Forgot your password? Ask the owner to reset it.'))],
+    // only whether something was typed is remembered for the unsaved-changes check, never the password itself
+    values: () => ({ c: current.control.value.length > 0, n: next.control.value.length > 0, a: again.control.value.length > 0 }),
+    async save() {
+      problem.textContent = '';
+      const fail = (m) => { problem.textContent = m; throw new Error(m); };
+      if (!current.control.value) fail('Enter your current password.');
+      if (next.control.value.length < PASSWORD_MIN) fail(`The new password must be at least ${PASSWORD_MIN} characters.`);
+      if (next.control.value !== again.control.value) fail('The two new passwords do not match.');
+      try { await api.changePassword(current.control.value, next.control.value); } catch (e) { problem.textContent = e.message; throw e; }
+    },
+  };
 }
 
 function buildApp() {

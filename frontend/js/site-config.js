@@ -25,6 +25,8 @@ export const siteConfig = {
   pickupStepMinutes: PICKUP_STEP_MINUTES,
   lowStockThreshold: LOW_STOCK_THRESHOLD,
   customMinLeadHours: CUSTOM_MIN_LEAD_HOURS,
+  customisationFeePence: 0, // her flat fee for a customised item (D-073); read from the settings when a page loads
+  customisationNote: '',
   homeProductLimit: HOME_PRODUCT_LIMIT,
   searchMinProducts: SEARCH_MIN_PRODUCTS,
   kindLabels: KIND_LABELS,

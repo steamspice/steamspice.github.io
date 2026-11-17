@@ -3,7 +3,7 @@
 // and the signed-in admin's own session; the database checks is_admin() on every request.
 import { siteConfig } from '../../js/site-config.js';
 import { prepList as computePrep } from '../../js/mock-backend.js';
-import { cleanChutneyTiers, validateChutneyTiers, SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from '../../js/admin-rules.js';
+import { CUSTOMISATION_NOTE_MAX, INGREDIENT_MAX, LIMITS, cleanChutneyTiers, validateChutneyTiers, SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from '../../js/admin-rules.js';
 
 import { backoffSeconds, LIVE_FLAG_AFTER_SECONDS, recordLive } from './live-feed.js';
 
@@ -44,7 +44,7 @@ const productRow = (r, library = [], categoryNames = new Map()) => {
     .sort((a, b) => a.sort_order - b.sort_order);
   return {
     id: r.id, slug: r.slug, name: r.name, kind: r.kind, category: categoryNames.get(r.category_id) ?? null, category_id: r.category_id ?? null, preorder_enabled: Boolean(r.preorder_enabled), preorder_ready_date: r.preorder_ready_date ?? null, preorder_limit: r.preorder_limit ?? null, unit_label: r.unit_label || '', price_pence: r.price_pence, available: r.available, active: r.active,
-    sort_order: r.sort_order, photo_path: r.photo_path, photo_alt: r.photo_alt || '', ingredients: (r.product_ingredients || []).slice().sort((a, b) => a.sort_order - b.sort_order).map((i) => i.name), allergen_ids: (r.product_allergens || []).map((x) => x.allergen_id), allergen_note: r.allergen_note || '', allergens_checked_at: r.allergens_checked_at ?? null,
+    sort_order: r.sort_order, photo_path: r.photo_path, photo_alt: r.photo_alt || '', ingredients: (r.product_ingredients || []).slice().sort((a, b) => a.sort_order - b.sort_order).map((i) => ({ id: i.ingredient_id, name: i.name, removable: Boolean(i.removable) })), allergen_ids: (r.product_allergens || []).map((x) => x.allergen_id), allergen_note: r.allergen_note || '', allergens_checked_at: r.allergens_checked_at ?? null,
     stock_quantity: stock ? stock.quantity : null,
     option_groups: effective,
   };
@@ -128,6 +128,12 @@ export const supabaseApi = {
         if (value === null && spec.optional) clear.push(key); // no row means no limit
         else if (Number.isInteger(value) && value >= spec.min && value <= spec.max) rows.push({ key, value });
         else refuse(`${spec.label}: enter a number from ${spec.min} to ${spec.max}.`);
+      } else if (key === 'customisation_fee_pence') {
+        if (!(Number.isInteger(value) && value >= 0 && value <= LIMITS.maxPence)) refuse('Customisation fee: enter an amount from £0 to £1,000.');
+        rows.push({ key, value });
+      } else if (key === 'customisation_note') {
+        const note = String(value ?? '').trim(); if (note.length > CUSTOMISATION_NOTE_MAX) refuse(`The note can be at most ${CUSTOMISATION_NOTE_MAX} characters.`);
+        rows.push({ key, value: note });
       } else if (key === 'included_chutney_tiers') { const problem = validateChutneyTiers(value); if (problem) refuse(problem); rows.push({ key, value: cleanChutneyTiers(value) });
       } else if (key in SETTING_LIMITS) rows.push({ key, value: String(value ?? '').slice(0, SETTING_LIMITS[key]) });
       else refuse(`Unknown setting: ${key}`);
@@ -140,7 +146,7 @@ export const supabaseApi = {
   async listProducts() {
     const sb = await loadClient();
     const [rows, library, categories] = await Promise.all([
-      sb.from('products').select('*,product_stock(quantity),product_allergens(allergen_id),product_ingredients(name,sort_order)').order('sort_order').then(unwrap),
+      sb.from('products').select('*,product_stock(quantity),product_allergens(allergen_id),product_ingredients(ingredient_id,name,sort_order,removable)').order('sort_order').then(unwrap),
       this.listLibrary(), this.listCategories(),
     ]);
     const names = new Map(categories.map((x) => [x.id, x.name]));
@@ -172,8 +178,20 @@ export const supabaseApi = {
     unwrap(await sb.from('product_allergens').delete().eq('product_id', id));
     if ((input.allergen_ids || []).length) unwrap(await sb.from('product_allergens').insert(input.allergen_ids.map((allergen_id) => ({ product_id: id, allergen_id }))));
     unwrap(await sb.from('product_ingredients').delete().eq('product_id', id));
-    const tags = (input.ingredients || []).map((t) => String(t).trim().replace(/\s+/g, ' ')).filter(Boolean);
-    if (tags.length) unwrap(await sb.from('product_ingredients').insert(tags.map((name, i) => ({ product_id: id, name, sort_order: i + 1 }))));
+    // each tag is { name, removable }; a name that is not in the library yet is added to it
+    const wanted = (input.ingredients || []).map((t) => ({ name: String(typeof t === 'string' ? t : t.name).trim().replace(/\s+/g, ' '), removable: typeof t === 'object' && Boolean(t.removable) })).filter((t) => t.name);
+    if (wanted.length) {
+      const library = unwrap(await sb.from('ingredients').select('id,name,sort_order'));
+      const byName = new Map(library.map((i) => [i.name.toLowerCase(), i]));
+      let order = Math.max(0, ...library.map((i) => i.sort_order));
+      const rows = [];
+      for (const [i, t] of wanted.entries()) {
+        let lib = byName.get(t.name.toLowerCase());
+        if (!lib) { lib = unwrap(await sb.from('ingredients').insert({ name: t.name, sort_order: ++order }).select('id,name').single()); byName.set(t.name.toLowerCase(), lib); }
+        rows.push({ product_id: id, name: lib.name, sort_order: i + 1, ingredient_id: lib.id, removable: t.removable });
+      }
+      unwrap(await sb.from('product_ingredients').insert(rows));
+    }
     return { id };
   },
   async reorderProducts(ids) {
@@ -304,6 +322,40 @@ export const supabaseApi = {
   async reorderAllergens(ids) { const sb = await loadClient(); await Promise.all(ids.map((id, i) => sb.from('allergens').update({ sort_order: i + 1 }).eq('id', id).then(unwrap))); },
   async allergenUsage(id) { const sb = await loadClient(); const { count, error } = await sb.from('product_allergens').select('product_id', { count: 'exact', head: true }).eq('allergen_id', id); if (error) fail(error); return count ?? 0; },
   async deleteAllergen(id) { const sb = await loadClient(); unwrap(await sb.from('allergens').delete().eq('id', id)); },
+  // The ingredient library (D-073): names she can add to, rename and delete. Renaming reaches every product (a database trigger).
+  async listIngredients() {
+    const sb = await loadClient();
+    const [lib, uses] = await Promise.all([sb.from('ingredients').select('id,name,sort_order').order('sort_order').then(unwrap), sb.from('product_ingredients').select('ingredient_id').then(unwrap)]);
+    return lib.map((i) => ({ ...i, product_count: uses.filter((u) => u.ingredient_id === i.id).length }));
+  },
+  async saveIngredient({ id, name }) {
+    const sb = await loadClient();
+    const text = String(name ?? '').trim().replace(/\s+/g, ' ');
+    if (!text) refuse('Enter a name for the ingredient.');
+    if (text.length > INGREDIENT_MAX) refuse(`An ingredient can be at most ${INGREDIENT_MAX} characters.`);
+    const all = unwrap(await sb.from('ingredients').select('id,name,sort_order'));
+    if (all.some((i) => i.id !== id && i.name.toLowerCase() === text.toLowerCase())) refuse('That ingredient is already in the list.');
+    if (id) unwrap(await sb.from('ingredients').update({ name: text }).eq('id', id));
+    else unwrap(await sb.from('ingredients').insert({ name: text, sort_order: Math.max(0, ...all.map((i) => i.sort_order)) + 1 }));
+  },
+  async deleteIngredient(id) {
+    const sb = await loadClient();
+    const used = unwrap(await sb.from('product_ingredients').select('product_id').eq('ingredient_id', id)).length;
+    unwrap(await sb.from('ingredients').delete().eq('id', id));
+    return used;
+  },
+  // Change the signed-in admin's own password (D-073): the current password is checked by signing in again with it, then Supabase Auth
+  // updates it. Nothing is logged or stored.
+  async changePassword(current, next) {
+    const sb = await loadClient();
+    const { data } = await sb.auth.getUser();
+    const email = data?.user?.email;
+    if (!email) refuse('You are not signed in. Log in again.');
+    const check = await sb.auth.signInWithPassword({ email, password: current });
+    if (check.error) refuse('Your current password is not right.');
+    const { error } = await sb.auth.updateUser({ password: next });
+    if (error) refuse(/password/i.test(error.message) ? error.message : 'The password could not be changed. Try again.');
+  },
   async ingredientNames() { const sb = await loadClient(); return [...new Set(unwrap(await sb.from('product_ingredients').select('name')).map((r) => r.name))].sort((a, b) => a.localeCompare(b)); },
 
   // Pickup (D-038)

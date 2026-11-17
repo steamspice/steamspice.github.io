@@ -45,6 +45,8 @@ export function validatePhotoFile(file) {
   return null;
 }
 
+export const CUSTOMISATION_NOTE_MAX = 200; // her own wording for the customisation fee
+export const PASSWORD_MIN = 12; // the shortest new admin password
 export const INGREDIENT_MAX = 60; // characters in one ingredient tag
 export const INGREDIENT_TAGS_MAX = 60; // tags on one product
 export const ALLERGEN_NAME_MAX = 80;
@@ -56,7 +58,7 @@ export function validateIngredients({ ingredients = [], allergen_ids = [], aller
   if (!Array.isArray(ingredients) || ingredients.length > INGREDIENT_TAGS_MAX) return `A product can have at most ${INGREDIENT_TAGS_MAX} ingredients.`;
   const seen = new Set();
   for (const raw of ingredients) {
-    const tag = cleanTag(raw);
+    const tag = cleanTag(typeof raw === 'string' ? raw : raw && raw.name);
     if (!tag) return 'An ingredient cannot be empty.';
     if (tag.length > INGREDIENT_MAX) return `"${tag.slice(0, 20)}..." is too long. An ingredient can be at most ${INGREDIENT_MAX} characters.`;
     if (seen.has(tag.toLowerCase())) return `"${tag}" is listed twice.`;

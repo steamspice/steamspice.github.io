@@ -49,6 +49,10 @@ create function t.order_json(p_slug text, p_qty integer, p_opts jsonb default '[
 create function t.opt(p_slug text, p_group text, p_label text) returns text language sql as $$
   select o.id::text from options o join option_groups g on g.id = o.group_id
   where g.name = p_group and o.label = p_label limit 1 $$;
+create function t.ing(p_slug text, p_name text) returns text language sql as $$
+  select pi.ingredient_id::text from product_ingredients pi join products p on p.id = pi.product_id join ingredients i on i.id = pi.ingredient_id where p.slug = p_slug and i.name = p_name $$;
+create function t.order_w(p_slug text, p_qty integer, p_opts jsonb, p_without jsonb, p_extra jsonb default '{}') returns jsonb language sql as $$
+  select jsonb_build_object('items', jsonb_build_array(jsonb_build_object('slug', p_slug, 'qty', p_qty, 'options', p_opts, 'without', p_without)), 'name', 'Test Buyer', 'phone', '07700 900123') || p_extra $$;
 create function t.stock(p_slug text) returns integer language sql as $$ select quantity from product_stock s join products p on p.id = s.product_id where p.slug = p_slug $$;
 create function t.place(p jsonb, p_now timestamptz default '2026-11-13 12:00:00+00') returns jsonb language sql as $$ select public._place_order(p, false, p_now) $$;
 
@@ -163,33 +167,33 @@ select t.chk((select order_number from orders order by created_at desc limit 1) 
 select t.chk(t.seq($$select t.place(t.order_json('veg-momo', 2) || '{"total_pence":1,"items":[{"slug":"veg-momo","qty":2,"unit_price_pence":1,"price_pence":1,"options":[]}]}')$$, $$select (select total_pence from orders order by created_at desc limit 1) = 2000$$), 'a tampered price is ignored (2 x 1000)');
 -- options
 select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('chicken-momo', 'Spice level', 'Medium'))))$$, $$select not (select (items -> 0 ->> 'customised')::boolean from orders order by created_at desc limit 1)$$), 'the default option does not make an order customised');
-select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('chicken-momo', 'Spice level', 'Hot'), t.opt('chicken-momo', 'Leave out', 'No onion'))))$$, $$select (select (items -> 0 ->> 'customised')::boolean and jsonb_array_length(items -> 0 -> 'options') = 2 from orders order by created_at desc limit 1)$$), 'a non-default option makes it customised and is stored in the snapshot');
+select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('chicken-momo', 'Spice level', 'Hot'))))$$, $$select (select (items -> 0 ->> 'customised')::boolean and jsonb_array_length(items -> 0 -> 'options') = 1 from orders order by created_at desc limit 1)$$), 'a non-default option makes it customised and is stored in the snapshot');
 select t.chk(t.stock('chicken-momo') = 7, 'a customised order does not lower stock (10 - 1 - 1 - 1 standard orders = 7)');
 -- effective groups: linked directly to the product, or to its category; a group linked to neither is rejected
 insert into option_groups (name, kind) values ('Extra sauce', 'single');
 insert into options (group_id, label, price_delta_pence, is_default) select id, 'Garlic', 30, false from option_groups where name = 'Extra sauce';
 insert into product_option_groups_link (product_id, group_id) select p.id, g.id from products p, option_groups g where p.slug = 'veg-momo' and g.name = 'Extra sauce';
 select t.chk(t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('x', 'Extra sauce', 'Garlic')))) ->> 'code' = 'option', 'an option from a group not linked to the product (or its category) is rejected');
-select t.chk(t.seq($$select t.place(t.order_json('veg-momo', 1, jsonb_build_array(t.opt('x', 'Extra sauce', 'Garlic'))))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 1030$$), 'an option from a group linked directly to the product is accepted and priced from the table (1000 + 30)');
+select t.chk(t.seq($$select t.place(t.order_json('veg-momo', 1, jsonb_build_array(t.opt('x', 'Extra sauce', 'Garlic'))))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 1000$$), 'an option from a group linked directly to the product is accepted (option prices are retired, D-073)');
 insert into categories (name) values ('Test category');
 update products set category_id = (select id from categories where name = 'Test category') where slug = 'chicken-momo';
 insert into category_option_groups (category_id, group_id) select c.id, g.id from categories c, option_groups g where c.name = 'Test category' and g.name = 'Extra sauce';
-select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('x', 'Extra sauce', 'Garlic'))))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 1030$$), 'a group applied to the product''s category is accepted for its products (effective groups)');
+select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('x', 'Extra sauce', 'Garlic'))))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 1000$$), 'a group applied to the product''s category is accepted for its products (effective groups)');
 -- a snapshot of the chosen option survives renaming and deleting the library entries
 select t.chk((select items -> 0 -> 'options' -> 0 ->> 'label' from orders order by created_at desc limit 1) = 'Garlic' and (select items -> 0 -> 'options' -> 0 ->> 'group' from orders order by created_at desc limit 1) = 'Extra sauce', 'the order keeps the option label and group name');
 update option_groups set name = 'Renamed' where name = 'Extra sauce';
 update options set label = 'Renamed too', price_delta_pence = 99 where label = 'Garlic';
-select t.chk((select items -> 0 -> 'options' -> 0 ->> 'label' from orders order by created_at desc limit 1) = 'Garlic' and (select (items -> 0 -> 'options' -> 0 ->> 'price_delta_pence')::int from orders order by created_at desc limit 1) = 30, 'renaming and repricing an option does not change an old order');
+select t.chk((select items -> 0 -> 'options' -> 0 ->> 'label' from orders order by created_at desc limit 1) = 'Garlic' and (select (items -> 0 -> 'options' -> 0 ->> 'price_delta_pence')::int from orders order by created_at desc limit 1) = 0, 'renaming and repricing an option does not change an old order');
 delete from option_groups where name = 'Renamed';
 select t.chk((select items -> 0 -> 'options' -> 0 ->> 'label' from orders order by created_at desc limit 1) = 'Garlic', 'deleting the group does not change an old order');
 update products set category_id = null where slug = 'chicken-momo';
 delete from categories where name = 'Test category';
 select t.chk(t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('chicken-momo', 'Spice level', 'Hot'), t.opt('chicken-momo', 'Spice level', 'Mild')))) ->> 'code' = 'option', 'two options in a single group are rejected');
-update options set active = false where label = 'No coriander';
-select t.chk(t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('chicken-momo', 'Leave out', 'No coriander')))) ->> 'code' = 'option', 'an inactive option is rejected');
-update options set active = true where label = 'No coriander';
+update options set active = false where label = 'Mild';
+select t.chk(t.place(t.order_json('chicken-momo', 1, jsonb_build_array(t.opt('chicken-momo', 'Spice level', 'Mild')))) ->> 'code' = 'option', 'an inactive option is rejected');
+update options set active = true where label = 'Mild';
 update options set price_delta_pence = 50 where label = 'Hot' and group_id = (select id from option_groups where name = 'Spice level');
-select t.chk(t.seq($$select t.place(t.order_json('veg-momo', 1, jsonb_build_array(t.opt('veg-momo', 'Spice level', 'Hot'))))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 1050$$), 'a real option price change is added (1000 + 50)');
+select t.chk(t.seq($$select t.place(t.order_json('veg-momo', 1, jsonb_build_array(t.opt('veg-momo', 'Spice level', 'Hot'))))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 1000$$), 'an option price is retired: the server ignores it (still 1000, no fee set)');
 select t.chk((t.place(t.order_json('veg-momo', 1, jsonb_build_array(t.opt('veg-momo', 'Spice level', 'Hot')), '{}') || '{"items":[{"slug":"veg-momo","qty":1,"options":[{"label":"Hot","price_delta_pence":0}]}]}') ->> 'ok') is distinct from 'true', 'option objects with a tampered delta are not accepted (ids only)');
 -- required fields, limits, availability
 select t.chk(t.place(t.order_json('chicken-momo', 1, '[]', '{"name":""}')) ->> 'code' = 'name', 'a name is required');
@@ -320,6 +324,30 @@ select t.chk(t.seq(format('select public._set_order_status(%L, ''new'')', (selec
 delete from settings where key = 'included_chutney_tiers';
 update products set price_pence = null, active = false, available = false where slug = 'chutney-pot';
 update product_stock set quantity = 2 where product_id = (select id from products where slug = 'veg-momo');
+
+-- ===== customisation fee and ingredients left out (Step 4s, D-073) =====
+insert into settings (key, value) values ('customisation_fee_pence', '150') on conflict (key) do update set value = excluded.value;
+update product_stock set quantity = 20 where product_id in (select id from products where slug in ('chicken-momo', 'veg-momo'));
+select t.chk(t.seq($$select t.place(t.order_w('chicken-momo', 3, '[]', jsonb_build_array(t.ing('chicken-momo', 'Onion'), t.ing('chicken-momo', 'Coriander')), '{"pickupDate":"2026-11-22","pickupTime":"15:00"}'))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 3150$$), 'one customised line of quantity 3 with two changes pays the fee once (3 x 1000 + 150)');
+select t.chk((select items -> 0 -> 'without' from orders order by created_at desc limit 1) = '["Onion","Coriander"]'::jsonb and (select (items -> 0 ->> 'customisation_fee_pence')::int from orders order by created_at desc limit 1) = 150, 'the order line keeps the names left out and the fee charged');
+select t.chk(t.seq($$select t.place(jsonb_build_object('items', jsonb_build_array(jsonb_build_object('slug','chicken-momo','qty',1,'options','[]'::jsonb,'without',jsonb_build_array(t.ing('chicken-momo','Onion'))), jsonb_build_object('slug','veg-momo','qty',1,'options','[]'::jsonb,'without',jsonb_build_array(t.ing('veg-momo','Onion')))), 'name','T','phone','07700 900123','pickupDate','2026-11-22','pickupTime','15:30'))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 2300$$), 'two products customised each pay the fee once (1000 + 1000 + 2 x 150)');
+select t.chk(t.place(t.order_w('chicken-momo', 1, '[]', jsonb_build_array(gen_random_uuid()::text), '{"pickupDate":"2026-11-22","pickupTime":"16:00"}')) ->> 'code' = 'ingredient', 'a left-out ingredient that is not on the product is rejected');
+update product_ingredients set removable = false where ingredient_id = t.ing('chicken-momo', 'Coriander')::uuid and product_id = (select id from products where slug = 'chicken-momo');
+select t.chk(t.place(t.order_w('chicken-momo', 1, '[]', jsonb_build_array(t.ing('chicken-momo', 'Coriander')), '{"pickupDate":"2026-11-22","pickupTime":"16:00"}')) ->> 'code' = 'ingredient', 'an always-included ingredient cannot be left out');
+update product_ingredients set removable = true where ingredient_id = t.ing('chicken-momo', 'Coriander')::uuid and product_id = (select id from products where slug = 'chicken-momo');
+update settings set value = '0' where key = 'customisation_fee_pence';
+select t.chk(t.seq($$select t.place(t.order_w('chicken-momo', 1, '[]', jsonb_build_array(t.ing('chicken-momo', 'Onion')), '{"pickupDate":"2026-11-22","pickupTime":"16:30"}'))$$, $$select (select total_pence from orders order by created_at desc limit 1) = 1000$$), 'a fee of 0 charges nothing');
+update settings set value = '150' where key = 'customisation_fee_pence';
+select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 1) || '{"customisation_fee_pence":0,"total_pence":1}')$$, $$select (select total_pence from orders order by created_at desc limit 1) = 1000$$), 'a fee or total sent by the browser is never read');
+-- the library: renaming reaches every product, deleting an ingredient does not change an old order
+update ingredients set name = 'Spring onion' where name = 'Onion';
+select t.chk(not exists (select 1 from product_ingredients where name = 'Onion') and exists (select 1 from product_ingredients where name = 'Spring onion'), 'renaming a library ingredient renames it on every product');
+select t.chk((select items -> 0 -> 'without' from orders where (items -> 0 ->> 'customisation_fee_pence') = '150' and (items -> 0 -> 'without') @> '["Onion"]'::jsonb order by created_at limit 1) = '["Onion","Coriander"]'::jsonb, 'an old order keeps the ingredient names it was placed with');
+delete from ingredients where name = 'Coriander';
+select t.chk(exists (select 1 from orders where (items -> 0 -> 'without') @> '["Coriander"]'::jsonb), 'deleting an ingredient does not change old orders');
+select t.table_policy('ingredients', $$insert into ingredients (name) values ('RLS test')$$, $$update ingredients set sort_order = 9 where name = 'RLS test'$$, $$delete from ingredients where name = 'RLS test'$$);
+select t.chk(t.try('anon', null, $$insert into ingredients (name) values ('anon')$$) = 'denied', 'anon cannot write the ingredient library');
+delete from settings where key = 'customisation_fee_pence';
 
 -- ===== catalogue (Step 4l) =====
 select t.chk(not exists (

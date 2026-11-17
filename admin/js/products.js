@@ -188,7 +188,7 @@ async function edit(id, guide = null) {
   const draft = {
     name: product?.name ?? '', kind: product?.kind ?? 'pack', unit_label: product?.unit_label ?? '', price: penceToPounds(product?.price_pence ?? null),
     active: product ? product.active : true, available: product ? product.available : true,
-    photo_path: product?.photo_path ?? null, photo_alt: product?.photo_alt ?? '', ingredients: [...(product?.ingredients ?? [])], allergen_ids: [...(product?.allergen_ids ?? [])], allergen_note: product?.allergen_note ?? '',
+    photo_path: product?.photo_path ?? null, photo_alt: product?.photo_alt ?? '', ingredients: (product?.ingredients ?? []).map((i) => (typeof i === 'string' ? { name: i, removable: false } : { name: i.name, removable: Boolean(i.removable) })), allergen_ids: [...(product?.allergen_ids ?? [])], allergen_note: product?.allergen_note ?? '',
     checked: Boolean(product?.allergens_checked_at), checkedAt: product?.allergens_checked_at ?? null, infoChanged: false,
     tracked: product ? product.stock_quantity != null : false, stock: product?.stock_quantity ?? 0,
     preorder_enabled: Boolean(product?.preorder_enabled), preorder_ready_date: product?.preorder_ready_date ?? '', preorder_limit: product?.preorder_limit ?? '',
@@ -302,26 +302,34 @@ async function edit(id, guide = null) {
   let checkBox = null; let checkNote = null;
   const infoChanged = () => { draft.infoChanged = true; markDirty(); if (draft.checked) { draft.checked = false; if (checkBox) checkBox.checked = false; if (checkNote) checkNote.textContent = 'You changed the allergen or ingredient information, so please tick the check again.'; } };
 
-  // ----- Ingredients: tags, one at a time, in her order -----
+  // ----- Ingredients (D-073): two kinds of pills. Always included cannot be left out by customers; Can be left out can. -----
   errors.ingredients = errorLine();
-  const tagList = el('div', { className: 'tag-list', 'aria-label': 'Ingredients' });
-  const tagInput = el('input', { type: 'text', maxLength: 60, list: 'ingredient-suggestions', placeholder: 'Add an ingredient', 'aria-label': 'Ingredient to add', autocomplete: 'off' });
+  const groupBox = (label) => el('div', { className: 'pills pills-edit', role: 'group', 'aria-label': label });
+  const alwaysBox = groupBox('Always included'); const removableBox = groupBox('Can be left out');
+  const tagInput = el('input', { type: 'text', maxLength: 60, list: 'ingredient-suggestions', placeholder: 'Type an ingredient', 'aria-label': 'Ingredient to add', autocomplete: 'off' });
   const suggestions = el('datalist', { id: 'ingredient-suggestions' });
   api.ingredientNames().then((names) => suggestions.replaceChildren(...names.map((n) => el('option', { value: n })))).catch(() => {});
+  const pill = (t) => el('span', { className: `pill pill-edit${t.removable ? ' pill-toggle' : ' pill-fixed'}` }, t.name,
+    el('button', { type: 'button', className: 'pill-move', 'aria-label': t.removable ? `Move ${t.name} to Always included` : `Move ${t.name} to Can be left out`, onclick: () => { t.removable = !t.removable; infoChanged(); drawTags(); } }, t.removable ? '← Always' : 'Can leave out →'),
+    el('button', { type: 'button', className: 'tag-remove', 'aria-label': `Remove ${t.name}`, onclick: () => { draft.ingredients.splice(draft.ingredients.indexOf(t), 1); infoChanged(); drawTags(); } }, '×'));
   const drawTags = () => {
-    tagList.replaceChildren(...draft.ingredients.map((t, i) => el('span', { className: 'tag-chip' }, t,
-      el('button', { type: 'button', className: 'tag-remove', 'aria-label': `Remove ${t}`, onclick: () => { draft.ingredients.splice(i, 1); infoChanged(); drawTags(); } }, '×'))));
-    if (!draft.ingredients.length) tagList.append(el('span', { className: 'muted' }, 'No ingredients added yet. Nothing is shown on the site.'));
+    alwaysBox.replaceChildren(...draft.ingredients.filter((t) => !t.removable).map(pill));
+    removableBox.replaceChildren(...draft.ingredients.filter((t) => t.removable).map(pill));
+    if (!alwaysBox.children.length) alwaysBox.append(el('span', { className: 'muted' }, 'None yet.'));
+    if (!removableBox.children.length) removableBox.append(el('span', { className: 'muted' }, 'None yet.'));
   };
-  const addTag = () => {
-    const tag = cleanTag(tagInput.value);
-    if (!tag) return;
-    const problem = validateIngredients({ ingredients: [...draft.ingredients, tag], allergen_ids: [], allergen_note: '' });
+  const addTag = (removable) => {
+    const name = cleanTag(tagInput.value);
+    if (!name) return;
+    const next = [...draft.ingredients, { name, removable }];
+    const problem = validateIngredients({ ingredients: next, allergen_ids: [], allergen_note: '' });
     if (problem) { showError('ingredients', problem); return; }
-    showError('ingredients', ''); draft.ingredients.push(tag); tagInput.value = ''; infoChanged(); drawTags(); tagInput.focus();
+    showError('ingredients', ''); draft.ingredients.push({ name, removable }); tagInput.value = ''; infoChanged(); drawTags(); tagInput.focus();
   };
-  tagInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } });
-  editorBox.append(card('Ingredients', el('div', { className: 'tag-add' }, tagInput, el('button', { type: 'button', className: 'btn btn-small', onclick: addTag }, 'Add')), suggestions, errors.ingredients, tagList));
+  tagInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(false); } });
+  editorBox.append(card('Ingredients', el('p', { className: 'muted' }, 'Customers see these in the product window. They can leave out only the ones marked "Can be left out". Press Enter to add as always included.'),
+    el('div', { className: 'tag-add' }, tagInput, el('button', { type: 'button', className: 'btn btn-small', onclick: () => addTag(false) }, 'Always included'), el('button', { type: 'button', className: 'btn btn-secondary btn-small', onclick: () => addTag(true) }, 'Can be left out')),
+    suggestions, errors.ingredients, el('h3', {}, 'Always included'), alwaysBox, el('h3', {}, 'Can be left out'), removableBox, el('p', { className: 'muted' }, el('a', { href: 'ingredients' }, 'Manage ingredients'))));
   drawTags();
 
   // ----- Allergens: the list is data in the database -----

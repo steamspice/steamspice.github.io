@@ -388,3 +388,15 @@ html:has(dialog[open]) { overflow: hidden; }
 .preorder-line[hidden] { display: none; }
 .free-line { margin: 0 0 var(--space-2xs); font-size: var(--text-small); font-weight: 600; color: var(--emerald); }
 .free-line-cart { margin-block: var(--space-xs); }
+
+/* Ingredient pills in the product window (D-073) */
+.pills { display: flex; flex-wrap: wrap; gap: var(--space-2xs); margin-block-end: var(--space-2xs); }
+.pill { display: inline-flex; align-items: center; gap: var(--space-3xs); min-block-size: var(--tap); padding-inline: var(--space-s); font: inherit; font-size: var(--text-ui); font-weight: 600; border-radius: var(--radius-pill); cursor: pointer; border: var(--hairline) solid var(--emerald); background: var(--white); color: var(--emerald); }
+.pill-toggle[aria-pressed="true"] { text-decoration: line-through; color: var(--muted); border-style: dashed; background: transparent; }
+.pill-fixed { cursor: default; color: var(--muted); border-color: var(--line-strong); background: var(--green-tint); }
+.pill-lock { inline-size: 1rem; block-size: 1rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pill:focus-visible { outline: var(--ring-width) solid var(--emerald); outline-offset: var(--ring-width); }
+.pill-note, .custom-fee { margin: 0 0 var(--space-2xs); font-size: var(--text-small); color: var(--muted); }
+.pill-note[hidden], .custom-fee[hidden] { display: none; }
+.fee-lines { margin: var(--space-xs) 0 0; padding: 0; list-style: none; }
+.fee-line { margin: 0 0 var(--space-3xs); font-size: var(--text-small); font-weight: 600; }

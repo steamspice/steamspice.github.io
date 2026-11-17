@@ -15,6 +15,15 @@ function defaultStorage() {
   try { return globalThis.localStorage ?? null; } catch { return null; }
 }
 
+// Ingredients left out are kept in the same list as the option ids, with a prefix, so a line is still (product + what was chosen).
+export const WITHOUT_PREFIX = 'x:';
+export const splitOptions = (options = []) => ({
+  optionIds: options.filter((o) => !String(o).startsWith(WITHOUT_PREFIX)),
+  without: options.filter((o) => String(o).startsWith(WITHOUT_PREFIX)).map((o) => String(o).slice(WITHOUT_PREFIX.length)),
+});
+// The shape the order function takes: { slug, qty, options: [option ids], without: [ingredient ids] }.
+export const normalizeItem = ({ slug, qty, options = [] }) => ({ slug, qty, ...(({ optionIds, without }) => ({ options: optionIds, without }))(splitOptions(options)) });
+
 // A line is one product with one set of chosen options. Only non-default options are stored.
 const cleanOptions = (options) => [...new Set((Array.isArray(options) ? options : []).filter((o) => typeof o === 'string' && o))].sort();
 export const lineKey = (slug, options) => [slug, ...cleanOptions(options)].join('|');
@@ -68,18 +77,21 @@ export function buildLines(items, products, maxQty = siteConfig.limits.maxQtyPer
   return items.map(({ slug, qty, options = [] }) => {
     const product = bySlug.get(slug) || null;
     const all = product ? (product.option_groups || []).flatMap((g) => g.options || []) : [];
-    const chosen = options.map((id) => all.find((o) => o.id === id)).filter(Boolean);
-    const customised = chosen.some((o) => !o.is_default);
+    const { optionIds, without } = splitOptions(options);
+    const chosen = optionIds.map((id) => all.find((o) => o.id === id)).filter(Boolean);
+    const leftOut = product ? (product.ingredients || []).filter((i) => i && typeof i === 'object' && i.removable && without.includes(i.id)) : [];
+    const customised = chosen.some((o) => !o.is_default) || leftOut.length > 0;
     const stock = product && Number.isInteger(product.stock_quantity) ? product.stock_quantity : null;
     // Pre-order (D-071): stock 0, the switch on and a ready date that has not passed. Such a line never uses stock.
     const preorder = preorderActive(product);
     const usesStock = stock !== null && !customised && !preorder; // customised lines are made to order
     const soldOut = usesStock && stock === 0;
     const unavailable = !product || !product.available || product.price_pence == null || soldOut;
-    const unitPence = unavailable ? 0 : product.price_pence + chosen.reduce((sum, o) => sum + (o.price_delta_pence || 0), 0);
+    const unitPence = unavailable ? 0 : product.price_pence; // option prices are retired (D-073): one flat customisation fee instead
+    const feePence = customised && !unavailable ? siteConfig.customisationFeePence || 0 : 0;
     return {
       slug, qty, options, product, unavailable, soldOut, customised, unitPence, preorder, readyFrom: preorder ? product.preorder_ready_date : null,
-      optionText: chosen.map((o) => o.label).join(', '),
+      optionText: chosen.map((o) => o.label).join(', '), withoutText: leftOut.map((i) => i.name).join(', '), feePence,
       maxQty: usesStock ? Math.min(stock, maxQty) : preorder && product.preorder_limit ? Math.min(product.preorder_limit, maxQty) : maxQty,
       overStock: usesStock && qty > stock,
       linePence: unavailable ? 0 : unitPence * qty,
@@ -87,7 +99,7 @@ export function buildLines(items, products, maxQty = siteConfig.limits.maxQtyPer
   });
 }
 
-export const cartTotal = (lines) => lines.reduce((sum, l) => sum + l.linePence, 0);
+export const cartTotal = (lines) => lines.reduce((sum, l) => sum + l.linePence + (l.feePence || 0), 0);
 
 export function updateHeaderCount(doc = document) {
   const n = getCart().count();

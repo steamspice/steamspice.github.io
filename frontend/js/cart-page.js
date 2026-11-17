@@ -99,8 +99,9 @@ function render() {
     } else {
       text.append(el('p', 'menu-meta', `${line.product.unit_label} \u2014 ${formatPrice(line.unitPence)} each`));
       if (line.preorder) text.append(el('p', 'preorder-line', `Pre-order, ready from ${shortDateLabel(line.readyFrom)}`));
+      if (line.withoutText) text.append(el('p', 'line-options', `Without: ${line.withoutText.toLowerCase()}`));
       if (line.customised) {
-        const opts = el('p', 'line-options', line.optionText + ' ');
+        const opts = el('p', 'line-options', line.optionText ? `${line.optionText} ` : '');
         opts.append(el('span', 'badge', 'Customised'));
         text.append(opts);
       }
@@ -117,6 +118,10 @@ function render() {
   }
   // The free chutney pot: shown under the items when the cart has a pack; free, not counted in the total.
   const free = includedLine(lines.filter((l) => !l.unavailable).map((l) => ({ kind: l.product && l.product.kind, qty: l.qty })), chutneyTiers);
+  const feeBox = $('[data-fee-lines]');
+  const feeLines = lines.filter((l) => l.feePence > 0 && !l.unavailable);
+  feeBox.hidden = !feeLines.length;
+  feeBox.replaceChildren(...feeLines.map((l) => el('li', 'fee-line', `Customisation +${formatPrice(l.feePence)} (${l.product.name})`)));
   const freeBox = $('[data-free-chutney]');
   freeBox.hidden = !free;
   freeBox.textContent = free ? `Free chutney pot, included with your order${free.label ? ` (${free.label.toLowerCase()})` : ''} \u2014 Free` : '';
@@ -227,7 +232,8 @@ async function confirm(e) {
   if (!lines.length) { render(); errorBox.textContent = 'There is nothing available in your cart.'; return; }
   const order = readOrder(lines);
   const totalPence = cartTotal(lines);
-  const summary = lines.map((l) => ({ qty: l.qty, name: l.product.name, unitLabel: l.product.unit_label, linePence: l.linePence, optionText: l.customised ? l.optionText : '', kind: l.product.kind, preorderReadyFrom: l.preorder ? l.readyFrom : null }));
+  const summary = lines.map((l) => ({ qty: l.qty, name: l.product.name, unitLabel: l.product.unit_label, linePence: l.linePence, optionText: [l.optionText, l.withoutText && `without ${l.withoutText.toLowerCase()}`].filter(Boolean).join(', '), kind: l.product.kind, preorderReadyFrom: l.preorder ? l.readyFrom : null }));
+  for (const l of lines) if (l.feePence > 0) summary.push({ qty: 1, name: `Customisation (${l.product.name})`, unitLabel: '', linePence: l.feePence, optionText: '', fee: true });
   const free = includedLine(summary, chutneyTiers);
   if (free) summary.push({ qty: 1, name: free.name, unitLabel: free.label || '', linePence: 0, optionText: '', included: true });
   setBusy(true);

@@ -1,4 +1,5 @@
 // submitOrder(order) -> { orderNumber, totalPence, emailed }. The backend is chosen in site-config.js.
+import { normalizeItem } from './cart.js';
 import { createMock, fetchSeed, ORDER_PREFIX, RuleError } from './mock-backend.js';
 import { siteConfig } from './site-config.js';
 import { callFunction, restGet, rpc, settingsMap } from './supabase-rest.js';
@@ -27,7 +28,7 @@ const mockGateway = {
   async submit(order, config) {
     await wait(config.mock.delayMs);
     try {
-      const result = await storeOf(config).placeOrder(order);
+      const result = await storeOf(config).placeOrder({ ...order, items: order.items.map(normalizeItem) });
       if (result.dropped) return { orderNumber: `${ORDER_PREFIX}-0000-00`, totalPence: 0, emailed: false }; // honeypot: looks like success
       return { orderNumber: result.orderNumber, totalPence: result.totalPence, emailed: false };
     } catch (e) {
@@ -42,7 +43,8 @@ const mockGateway = {
 // 422 with a message for the customer; anything else (network, 5xx) throws, and the cart offers the WhatsApp backup.
 const supabaseGateway = {
   async submit(order, config) {
-    const { items, name, phone, notes, pickupDate, pickupTime, website } = order; // totalPenceHint and the like are never sent
+    const { name, phone, notes, pickupDate, pickupTime, website } = order; // totalPenceHint and the like are never sent
+    const items = order.items.map(normalizeItem);
     const res = await callFunction('place-order', { items, name, phone, notes, pickupDate, pickupTime, website }, config);
     let data = null;
     try { data = await res.json(); } catch { /* not JSON */ }
@@ -51,12 +53,12 @@ const supabaseGateway = {
     throw new Error(`place-order: ${res.status}`);
   },
   async state(config) {
-    const open = { orderingOpen: true, closedMessage: '', fullDates: [], customMinLeadHours: config.customMinLeadHours, chutneyTiers: [] };
+    const open = { customisationFeePence: 0, customisationNote: '', orderingOpen: true, closedMessage: '', fullDates: [], customMinLeadHours: config.customMinLeadHours, chutneyTiers: [] };
     try {
-      const keys = 'ordering_open,ordering_closed_message,custom_min_lead_hours,included_chutney_tiers';
+      const keys = 'ordering_open,ordering_closed_message,custom_min_lead_hours,included_chutney_tiers,customisation_fee_pence,customisation_note';
       const [rows, full] = await Promise.all([restGet(`settings?select=key,value&key=in.(${keys})`, config), rpc('full_pickup_dates', {}, config).catch(() => [])]);
       const s = settingsMap(rows);
-      return { orderingOpen: s.ordering_open !== false, closedMessage: s.ordering_closed_message || '', fullDates: Array.isArray(full) ? full : [], customMinLeadHours: Number(s.custom_min_lead_hours) || config.customMinLeadHours, chutneyTiers: Array.isArray(s.included_chutney_tiers) ? s.included_chutney_tiers : [] };
+      return { customisationFeePence: Number.isInteger(s.customisation_fee_pence) ? s.customisation_fee_pence : 0, customisationNote: typeof s.customisation_note === 'string' ? s.customisation_note : '', orderingOpen: s.ordering_open !== false, closedMessage: s.ordering_closed_message || '', fullDates: Array.isArray(full) ? full : [], customMinLeadHours: Number(s.custom_min_lead_hours) || config.customMinLeadHours, chutneyTiers: Array.isArray(s.included_chutney_tiers) ? s.included_chutney_tiers : [] };
     } catch { return open; } // if the settings cannot be read the cart stays usable; the function still enforces every rule
   },
 };
@@ -73,5 +75,9 @@ export async function submitOrder(order, config = siteConfig) {
 export async function getOrderingState(config = siteConfig) {
   const gateway = gateways[config.backend];
   if (!gateway) throw new Error(`Unknown backend: ${config.backend}`);
-  return gateway.state(config);
+  const state = await gateway.state(config);
+  // the customisation fee and her wording are settings, never hard-coded: the carts and the shop read them from here
+  config.customisationFeePence = state.customisationFeePence || 0;
+  config.customisationNote = state.customisationNote || '';
+  return state;
 }

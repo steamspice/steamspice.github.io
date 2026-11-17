@@ -63,5 +63,5 @@ export function fillTemplate(template, values) {
 
 // One line per item for {items}: "- 2 x Frozen chicken momo (40 pieces) (Hot, No onion)".
 export function describeItems(items) {
-  return items.map((l) => `- ${l.qty} x ${l.name}${l.unit_label ? ` (${l.unit_label})` : ''}${l.options && l.options.length ? ` (${l.options.map((o) => o.label).join(', ')})` : ''}`).join('\n');
+  return items.map((l) => `- ${l.qty} x ${l.name}${l.unit_label ? ` (${l.unit_label})` : ''}${l.options && l.options.length ? ` (${l.options.map((o) => o.label).join(', ')})` : ''}${l.without && l.without.length ? ` (without ${l.without.map((w) => w.toLowerCase()).join(', ')})` : ''}${l.customisation_fee_pence > 0 ? `, customisation +${formatPrice(l.customisation_fee_pence)}` : ''}`).join('\n');
 }

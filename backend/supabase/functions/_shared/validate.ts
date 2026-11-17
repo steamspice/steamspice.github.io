@@ -3,7 +3,7 @@
 export const LIMITS = { maxItems: 20, nameMax: 80, phoneMax: 20, notesMax: 500, slugMax: 80, optionsPerLine: 12, rateLimit: 8, rateWindowSeconds: 600 };
 
 export type OrderPayload = {
-  items: { slug: string; qty: number; options: string[] }[];
+  items: { slug: string; qty: number; options: string[]; without: string[] }[];
   name: string; phone: string; notes: string; pickupDate: string | null; pickupTime: string | null;
 };
 export type Parsed = { ok: true; honeypot: boolean; payload: OrderPayload } | { ok: false; code: string; message: string };
@@ -25,11 +25,13 @@ export function parseOrderBody(body: unknown): Parsed {
   for (const raw of b.items) {
     const r = raw as Record<string, unknown>;
     const options = Array.isArray(r?.options) ? r.options : [];
+    const without = Array.isArray(r?.without) ? r.without : [];
     if (!r || !isText(r.slug, LIMITS.slugMax) || typeof r.qty !== 'number' || !Number.isFinite(r.qty) || options.length > LIMITS.optionsPerLine
-        || !options.every((o) => typeof o === 'string' && UUID_RE.test(o))) {
+        || !options.every((o) => typeof o === 'string' && UUID_RE.test(o))
+        || without.length > LIMITS.optionsPerLine || !without.every((o) => typeof o === 'string' && UUID_RE.test(o))) {
       return { ok: false, code: 'bad_request', message: 'The order could not be read.' };
     }
-    items.push({ slug: r.slug, qty: r.qty, options: options as string[] });
+    items.push({ slug: r.slug, qty: r.qty, options: options as string[], without: without as string[] });
   }
   const text = (v: unknown, max: number) => (v == null ? '' : isText(v, max * 4) ? v.trim().slice(0, max) : null);
   const name = text(b.name, LIMITS.nameMax), phone = text(b.phone, LIMITS.phoneMax), notes = text(b.notes, LIMITS.notesMax);

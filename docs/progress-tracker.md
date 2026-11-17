@@ -2,7 +2,7 @@
 
 The coding agent updates this file at the end of every phase (see `docs/usage-rules.md` section 7). Trust it instead of re-exploring the repository. Edit only the lines that changed.
 
-- Last updated: 2026-11-17 (Step 4r, coding agent)
+- Last updated: 2026-11-17 (Step 4s, coding agent)
 - Current step: **Step 4d built and merged. Waiting for the owner: backend setup (`backend/README.md` section 3) and the live checks**
 - Next action: owner finishes `backend/README.md` and tests the admin on the live site; then Step 4f (admin visual style from the approved reference and Products redesign, D-061), then Step 4g (editable allergens and ingredients, Save bar fix, D-062), then Step 4h (weekly pickup hours redesign, D-063), then Step 4i (admin sales summary, D-064), then Step 4j (Realtime connection fix), then Step 4n (admin fixes round: product editor back to one page, Settings hub look and back path, notice-period modal, red allergen navigation, order More menu, Publish wording; 4m is folded into it), Step 4o (blurred colour patches on the public site, D-067), Step 4p (new logo everywhere D-068, sauce pictures D-069, repo address default D-070), Step 4q (messaging fallback, same-day pickup, stock labels, pre-orders, D-071), Step 4r (free chutney with every order, hot sauce removed, D-072), Step 4s (ingredient pills, one customisation fee, change password, D-073; run before 4l), Step 4l (catalogue: categories, reusable options, allergens by product, D-065), then Step 5 (SEO, hardening, launch).
 
@@ -239,6 +239,13 @@ Legend: `[ ]` not done, `[x]` done. For every ticked item add: commit hash, one-
 - [x] Orders cards per the reference (Confirm and More on one row; Message customer moved into More); Home, Prep, Pickup, Settings use the kit through shared CSS
 - [ ] Owner checks: press feel, toggles, glass bars over cards, patches on all pages, a real product save, the publish banner
 
+## Step 4s — Ingredient pills, one customisation fee, change password (D-073)
+
+- [x] Migration 0015: ingredient library (`ingredients`, `product_ingredients.ingredient_id/removable`, rename trigger), settings `customisation_fee_pence` and `customisation_note` (public), order function: left-out ingredients (removable only, names snapshotted), one flat fee per customised line, option prices ignored. Data move on the seed database: 0 existing tags (none were entered), 4 "No X" options became removable ingredients (Onion and Coriander on each momo), 0 unmapped; the old Leave out groups are switched off, not deleted.
+- [x] Shop: "What's in it" pills (locked or toggle), "Customisation +£X" line and her note, cart "Without:" and fee lines, receipt, order card, WhatsApp list.
+- [x] Admin: two pill groups in the product editor, Manage → Ingredients screen, Settings → Ordering fee and note, Settings → Account → Change password.
+- Left-out ingredients travel in the cart as `x:<ingredient id>` entries beside the option ids; the order function receives them as `without`.
+
 ## Step 4r — Free chutney with every order, no hot sauce (D-072)
 
 - [x] Hot sauce removed (seed, demo, shop and home regions, tile copy, how-to-cook, docs); migration 0014 hides the live product (inactive, unavailable, stock row removed; not deleted). The red `photo-sauce.webp` is unused; the home tile shows the drawn bowl until `photo-chutney.webp` exists.
@@ -467,3 +474,5 @@ Legend: `[ ]` not done, `[x]` done. For every ticked item add: commit hash, one-
 - 2026-11-17, step 4q (demo backend only): build passes; database tests pass (same-day pickup, pre-order rules, limit, cancel and re-open leave stock alone); mock-backend, pickup, admin-rules, regions, build-supabase, launch-gate tests pass; Playwright at 390 px: pre-order card and cart (earliest line, ready-date floor), order card badge and return strip, sms link form, invalid-phone strip. Not checked: real WhatsApp, the phone app hand-off and return, real Supabase.
 
 - 2026-11-17, step 4r (demo backend only): build passes; database tests pass (free pot line, only-chutney order, tier label, cancel and re-open); mock-backend, regions, build-supabase, admin-rules, launch-gate tests pass; Playwright at 390 px: shop without hot sauce, cart with and without a size label, sizes editor, receipt. Not checked: real Supabase.
+
+- 2026-11-17, step 4s (demo backend only): build passes; database tests pass (fee once per customised line for quantity 3 with two changes, two products each pay once, fee 0, non-removable and foreign ingredients refused, tampered fee ignored, snapshots survive rename and delete, RLS); mock-backend, admin-rules, functions, regions, build-supabase tests pass; Playwright at 390 px: pills, fee line, cart, receipt, admin order card, ingredient library, account errors. Not checked: real Supabase and the real password change.

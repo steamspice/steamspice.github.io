@@ -114,14 +114,13 @@
       <button type="button" class="dialog-close" data-dialog-close aria-label="Close"><svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 L19 19 M19 5 L5 19"/></svg></button>
     </div>
     <div class="dialog-body" data-options>
-      
-      <fieldset class="opt-group" data-group="leave-out" data-kind="multiple">
-      <legend>Leave out</legend>
-      <div class="opt-list">
-      <label class="opt"><input type="checkbox" name="opt-chicken-momo-leave-out" value="no-onion" data-delta="0" data-default="false"> <span>No onion</span></label>
-      <label class="opt"><input type="checkbox" name="opt-chicken-momo-leave-out" value="no-coriander" data-delta="0" data-default="false"> <span>No coriander</span></label>
-      </div>
-    </fieldset>
+      <section class="dialog-section">
+        <h3>What's in it</h3>
+        <div class="pills" role="group" aria-label="What is in it"><button type="button" class="pill pill-toggle" data-ingredient="onion" aria-pressed="false">Onion<span class="visually-hidden" data-pill-state> (included, tap to leave out)</span></button><button type="button" class="pill pill-toggle" data-ingredient="coriander" aria-pressed="false">Coriander<span class="visually-hidden" data-pill-state> (included, tap to leave out)</span></button></div>
+        <p class="pill-note" data-pill-note role="status" hidden></p>
+        
+        
+      </section>
       <fieldset class="opt-group" data-group="spice" data-kind="single">
       <legend>Spice level</legend>
       <div class="opt-list">
@@ -133,6 +132,7 @@
     </div>
     <div class="dialog-foot">
       <p class="custom-note" data-custom-note hidden></p>
+      <p class="custom-fee" data-custom-fee hidden></p>
       <p class="stock-line" data-stock-line hidden></p>
       <div class="dialog-buy">
         <div class="stepper" role="group" aria-label="Quantity of Frozen chicken momo">
@@ -173,14 +173,13 @@
       <button type="button" class="dialog-close" data-dialog-close aria-label="Close"><svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 L19 19 M19 5 L5 19"/></svg></button>
     </div>
     <div class="dialog-body" data-options>
-      
-      <fieldset class="opt-group" data-group="leave-out" data-kind="multiple">
-      <legend>Leave out</legend>
-      <div class="opt-list">
-      <label class="opt"><input type="checkbox" name="opt-veg-momo-leave-out" value="no-onion" data-delta="0" data-default="false"> <span>No onion</span></label>
-      <label class="opt"><input type="checkbox" name="opt-veg-momo-leave-out" value="no-coriander" data-delta="0" data-default="false"> <span>No coriander</span></label>
-      </div>
-    </fieldset>
+      <section class="dialog-section">
+        <h3>What's in it</h3>
+        <div class="pills" role="group" aria-label="What is in it"><button type="button" class="pill pill-toggle" data-ingredient="onion" aria-pressed="false">Onion<span class="visually-hidden" data-pill-state> (included, tap to leave out)</span></button><button type="button" class="pill pill-toggle" data-ingredient="coriander" aria-pressed="false">Coriander<span class="visually-hidden" data-pill-state> (included, tap to leave out)</span></button></div>
+        <p class="pill-note" data-pill-note role="status" hidden></p>
+        
+        
+      </section>
       <fieldset class="opt-group" data-group="spice" data-kind="single">
       <legend>Spice level</legend>
       <div class="opt-list">
@@ -192,6 +191,7 @@
     </div>
     <div class="dialog-foot">
       <p class="custom-note" data-custom-note hidden></p>
+      <p class="custom-fee" data-custom-fee hidden></p>
       <p class="stock-line" data-stock-line hidden></p>
       <div class="dialog-buy">
         <div class="stepper" role="group" aria-label="Quantity of Frozen veg momo">
@@ -244,6 +244,7 @@
     </div>
     <div class="dialog-foot">
       <p class="custom-note" data-custom-note hidden></p>
+      <p class="custom-fee" data-custom-fee hidden></p>
       <p class="stock-line" data-stock-line hidden></p>
       <div class="dialog-buy">
         <div class="stepper" role="group" aria-label="Quantity of Chutney pot">
@@ -260,8 +261,8 @@
 </ul>
 <p class="empty-note" data-no-results hidden>No products match. Try another word or filter.</p>
 </div>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Frozen chicken momo","description":"A pack of 40 homemade chicken momo. Keep them frozen, then cook them straight from the freezer.","offers":{"@type":"Offer","priceCurrency":"GBP","price":"10.00","availability":"https://schema.org/InStock","url":"shop"}}</script>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Frozen veg momo","description":"A pack of 40 homemade veg momo. Keep them frozen, then cook them straight from the freezer.","offers":{"@type":"Offer","priceCurrency":"GBP","price":"10.00","availability":"https://schema.org/InStock","url":"shop"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Frozen chicken momo","description":"A pack of 40 homemade chicken momo. Keep them frozen, then cook them straight from the freezer. Ingredients: Onion, Coriander.","offers":{"@type":"Offer","priceCurrency":"GBP","price":"10.00","availability":"https://schema.org/InStock","url":"shop"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Frozen veg momo","description":"A pack of 40 homemade veg momo. Keep them frozen, then cook them straight from the freezer. Ingredients: Onion, Coriander.","offers":{"@type":"Offer","priceCurrency":"GBP","price":"10.00","availability":"https://schema.org/InStock","url":"shop"}}</script>
 <!-- /build:products -->
       </div>
     </section>

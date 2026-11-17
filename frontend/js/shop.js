@@ -4,6 +4,7 @@ import './main.js';
 import { buildLines, formatPrice, getCart, updateHeaderCount } from './cart.js';
 import { updateCheckoutBar } from './checkout-bar.js';
 import { loadPickup, loadRuntimePreorder, loadRuntimeStock } from './data.js';
+import { getOrderingState } from './order-gateway.js';
 import { usedKeyboard } from './input-mode.js';
 import { earliestPickup, noticeText } from './pickup.js';
 import { preorderLabel, ukTodayIso } from './preorder.js';
@@ -122,6 +123,11 @@ function stepCard(card, direction) {
 // ---- The details window ----
 const chosen = (dlg) => [...dlg.querySelectorAll('input:checked')];
 const nonDefaultIds = (dlg) => chosen(dlg).filter((i) => i.dataset.default === 'false').map((i) => i.value);
+const leftOutIds = (dlg) => [...dlg.querySelectorAll('.pill-toggle[aria-pressed="true"]')].map((b) => b.dataset.ingredient);
+// her flat customisation fee and wording (D-073): settings, read when the page loads
+const feePence = () => siteConfig.customisationFeePence || 0;
+const stateReady = getOrderingState().catch(() => null);
+stateReady.then(() => { document.querySelectorAll('dialog[open]').forEach(updateDialog); updateCheckoutBar(); });
 
 async function earliestText() {
   try {
@@ -135,8 +141,9 @@ async function updateDialog(dlg) {
   const card = dlg.closest('[data-slug]');
   const info = cardInfo(card);
   const ids = nonDefaultIds(dlg);
-  const customised = ids.length > 0;
-  const delta = chosen(dlg).reduce((sum, i) => sum + Number(i.dataset.delta || 0), 0);
+  const out = leftOutIds(dlg);
+  const customised = ids.length > 0 || out.length > 0;
+  const fee = customised ? feePence() : 0;
   const pre = isPre(info);
   const inCart = (customised && !pre) || info.stock === null ? 0 : cart.qtyOf(info.slug);
   const limit = pre ? Math.max(0, capOf(info) - inCart) : customised || info.stock === null ? MAX_QTY : Math.max(0, Math.min(info.stock, MAX_QTY) - inCart);
@@ -149,7 +156,7 @@ async function updateDialog(dlg) {
   const add = dlg.querySelector('[data-dialog-add]');
   add.disabled = limit === 0;
   const addLabel = dlg.querySelector('[data-dialog-add-label]'); if (addLabel) addLabel.textContent = pre ? 'Pre-order' : 'Add to cart';
-  dlg.querySelector('[data-dialog-total]').textContent = limit === 0 ? '' : ` · ${formatPrice((info.price + delta) * qty)}`;
+  dlg.querySelector('[data-dialog-total]').textContent = limit === 0 ? '' : ` · ${formatPrice(info.price * qty + fee)}`;
   // Stock: only standard lines use the frozen stock; customised lines are made to order.
   const stockLine = dlg.querySelector('[data-stock-line]');
   let text = '';
@@ -163,6 +170,14 @@ async function updateDialog(dlg) {
     stockLine.textContent = text;
   }
   stockLine.hidden = !text;
+  // The flat fee: one small line when the choice is customised, and her note (or the default wording) when a fee is set.
+  const feeLine = dlg.querySelector('[data-custom-fee]');
+  if (feeLine) {
+    const f = feePence();
+    feeLine.hidden = !(f > 0);
+    const wording = siteConfig.customisationNote || `Leaving something out or choosing a different option adds ${formatPrice(f)} once for this item, however many changes you make.`;
+    feeLine.textContent = f > 0 ? `${customised ? `Customisation +${formatPrice(f)}. ` : ''}${wording}` : '';
+  }
   // Customised: longer notice and the earliest pickup date.
   const note = dlg.querySelector('[data-custom-note]');
   note.hidden = !customised;
@@ -173,8 +188,17 @@ async function updateDialog(dlg) {
   }
 }
 
+// A can-be-left-out pill: tap to leave out (struck through, announced as left out), tap again to put it back.
+function setPill(btn, out) {
+  btn.setAttribute('aria-pressed', String(out));
+  const s = btn.querySelector('[data-pill-state]');
+  if (s) s.textContent = out ? ' (left out, tap to put back)' : ' (included, tap to leave out)';
+}
+
 function resetDialog(dlg) {
   dlg.querySelectorAll('input').forEach((i) => { i.checked = i.dataset.default === 'true'; });
+  dlg.querySelectorAll('.pill-toggle').forEach((b) => setPill(b, false));
+  const pn = dlg.querySelector('[data-pill-note]'); if (pn) pn.hidden = true;
   const output = dlg.querySelector('[data-qty-value]');
   if (output) output.textContent = '1';
 }
@@ -193,7 +217,7 @@ function addFromDialog(dlg) {
   const card = dlg.closest('[data-slug]');
   const info = cardInfo(card);
   const qty = Number(dlg.querySelector('[data-qty-value]').textContent);
-  const ids = nonDefaultIds(dlg);
+  const ids = [...nonDefaultIds(dlg), ...leftOutIds(dlg).map((id) => `x:${id}`)];
   if (!cart.add(info.slug, qty, ids)) { dlg.querySelector('[data-custom-note]').textContent = 'Your cart is full. Remove something first.'; dlg.querySelector('[data-custom-note]').hidden = false; return; }
   announce(card, `Added ${qty} x ${info.name}${ids.length ? ' (customised)' : ''} to your cart.`);
   dlg.close();
@@ -206,6 +230,13 @@ document.addEventListener('click', (e) => {
   if (!card) return;
   const dlg = e.target.closest('dialog');
   if (dlg) { // inside the window
+    const pill = e.target.closest('.pill');
+    if (pill) {
+      const pn = dlg.querySelector('[data-pill-note]');
+      if (pill.matches('.pill-toggle')) { setPill(pill, pill.getAttribute('aria-pressed') !== 'true'); if (pn) pn.hidden = true; updateDialog(dlg); }
+      else if (pn) { pn.textContent = "Part of the recipe, so it can't be left out."; pn.hidden = false; }
+      return;
+    }
     if (e.target.closest('[data-dialog-close]')) dlg.close();
     else if (e.target.closest('[data-dialog-add]')) addFromDialog(dlg);
     else if (e.target.closest('[data-qty-plus]') || e.target.closest('[data-qty-minus]')) {

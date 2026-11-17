@@ -18,7 +18,7 @@ function productJsonLd(products, siteUrl) {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: p.name,
-    description: [p.description || p.summary || `${p.name}, ${p.unit_label}`, (p.ingredients || []).length && `Ingredients: ${p.ingredients.join(', ')}.`, (p.allergens || []).length && `Contains: ${p.allergens.join(', ')}.`, p.allergen_note].filter(Boolean).join(' '),
+    description: [p.description || p.summary || `${p.name}, ${p.unit_label}`, ingredientsOf(p).length && `Ingredients: ${ingredientsOf(p).map((i) => i.name).join(', ')}.`, (p.allergens || []).length && `Contains: ${p.allergens.join(', ')}.`, p.allergen_note].filter(Boolean).join(' '),
     offers: {
       '@type': 'Offer',
       priceCurrency: 'GBP',
@@ -53,17 +53,19 @@ function priceBlock(p) {
 const groupsOf = (p) => (p.option_groups || []).filter((g) => (g.options || []).length);
 const hasOptions = (p) => groupsOf(p).length > 0;
 // Pre-order (D-071): stock 0, the switch on, and a ready date that has not passed. The date is also checked again in the browser.
+// Ingredients are { id, name, removable }; older data may be plain names (always included).
+export const ingredientsOf = (p) => (p.ingredients || []).map((i) => (typeof i === 'string' ? { id: i.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: i, removable: false } : i));
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const preorderReady = (p) => (p.preorder_enabled && p.preorder_ready_date && p.preorder_ready_date >= todayIso() ? p.preorder_ready_date : null);
 const preorderOf = (p) => (preorderReady(p) && Number.isInteger(p.stock_quantity) && p.stock_quantity === 0 ? preorderReady(p) : null);
 const shortDay = (iso) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00:00Z`));
 const preorderText = (iso) => `Pre-order · ready from ${shortDay(iso)}`;
 const isSoldOut = (p) => Number.isInteger(p.stock_quantity) && p.stock_quantity === 0;
-const delta = (o) => (o.price_delta_pence ? ` <span class="opt-delta">+ ${formatPrice(o.price_delta_pence)}</span>` : '');
+const delta = () => ''; // option prices are retired (D-073): one flat customisation fee instead
 
 function optionGroupHtml(p, g) {
   const single = g.kind === 'single';
-  const inputs = g.options.map((o) => `<label class="opt"><input type="${single ? 'radio' : 'checkbox'}" name="opt-${esc(p.slug)}-${esc(g.id)}" value="${esc(o.id)}" data-delta="${o.price_delta_pence || 0}" data-default="${o.is_default ? 'true' : 'false'}"${o.is_default ? ' checked' : ''}> <span>${esc(o.label)}</span>${delta(o)}</label>`).join('\n      ');
+  const inputs = g.options.map((o) => `<label class="opt"><input type="${single ? 'radio' : 'checkbox'}" name="opt-${esc(p.slug)}-${esc(g.id)}" value="${esc(o.id)}" data-delta="0" data-default="${o.is_default ? 'true' : 'false'}"${o.is_default ? ' checked' : ''}> <span>${esc(o.label)}</span>${delta(o)}</label>`).join('\n      ');
   return `<fieldset class="opt-group" data-group="${esc(g.id)}" data-kind="${esc(g.kind)}">
       <legend>${esc(g.label)}</legend>
       <div class="opt-list">
@@ -76,13 +78,19 @@ function optionGroupHtml(p, g) {
 // Three zones: header (thumbnail, name, price, close), scrolling middle, footer (notes, stepper, add).
 // Ingredients and allergens come from the admin's data (D-062): a clean list in her order, and the allergen names she ticked.
 // With none of them the whole block is left out (D-052): nothing is invented.
+// A pill per ingredient (D-073): always-included ones are greyed with a lock and cannot be left out; the others are toggles.
+const LOCK = '<svg class="pill-lock" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>';
+const pillHtml = (i) => (i.removable
+  ? `<button type="button" class="pill pill-toggle" data-ingredient="${esc(i.id)}" aria-pressed="false">${esc(i.name)}<span class="visually-hidden" data-pill-state> (included, tap to leave out)</span></button>`
+  : `<button type="button" class="pill pill-fixed" data-fixed aria-disabled="true">${esc(i.name)}${LOCK}<span class="visually-hidden"> (part of the recipe, cannot be left out)</span></button>`);
 export function ingredientsHtml(p) {
-  const ingredients = p.ingredients || [];
+  const ingredients = ingredientsOf(p);
   const allergens = p.allergens || [];
   if (!ingredients.length && !allergens.length && !p.allergen_note) return '';
   return `<section class="dialog-section">
-        <h3>Ingredients and allergens</h3>
-        ${ingredients.length ? `<ul class="ingredient-list">${ingredients.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}
+        <h3>What's in it</h3>
+        ${ingredients.length ? `<div class="pills" role="group" aria-label="What is in it">${ingredients.map(pillHtml).join('')}</div>
+        <p class="pill-note" data-pill-note role="status" hidden></p>` : ''}
         ${allergens.length ? `<p class="allergy-line"><strong>Contains:</strong> ${allergens.map((a) => esc(a)).join(', ')}</p>` : ''}
         ${p.allergen_note ? `<p class="allergy-line">${esc(p.allergen_note)}</p>` : ''}
       </section>`;
@@ -125,6 +133,7 @@ function dialogHtml(p) {
     </div>
     <div class="dialog-foot">
       <p class="custom-note" data-custom-note hidden></p>
+      <p class="custom-fee" data-custom-fee hidden></p>
       ${stockLine}
       ${buy}
     </div>

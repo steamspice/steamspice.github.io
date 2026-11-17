@@ -8,14 +8,14 @@ const base = (extra = {}) => ({ items: [{ slug: 'chicken-momo', qty: 2, options:
 test('a well-formed order is copied into a payload with only slug, quantity and option ids', () => {
   const r = parseOrderBody(base({ notes: 'ring', pickupDate: '2026-11-14', pickupTime: '10:30', total_pence: 1, unit_price_pence: 1 }));
   assert.equal(r.ok, true);
-  assert.deepEqual(r.payload.items, [{ slug: 'chicken-momo', qty: 2, options: [UUID] }]);
+  assert.deepEqual(r.payload.items, [{ slug: 'chicken-momo', qty: 2, options: [UUID], without: [] }]);
   assert.equal(r.payload.name, 'Asha');
   assert.equal('total_pence' in r.payload, false);
   assert.equal(r.honeypot, false);
 });
 test('a price sent inside an item is dropped', () => {
   const r = parseOrderBody({ ...base(), items: [{ slug: 'veg-momo', qty: 1, unit_price_pence: 1, price_pence: 1 }] });
-  assert.deepEqual(r.payload.items, [{ slug: 'veg-momo', qty: 1, options: [] }]);
+  assert.deepEqual(r.payload.items, [{ slug: 'veg-momo', qty: 1, options: [], without: [] }]);
 });
 test('a filled honeypot is flagged', () => assert.equal(parseOrderBody(base({ website: 'spam' })).honeypot, true));
 test('bad shapes are refused', () => {
