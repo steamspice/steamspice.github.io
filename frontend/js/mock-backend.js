@@ -1,10 +1,11 @@
 // Demo backend (D-048), developer-facing only. The rules the database will enforce in Step 3 live here, in one place, as pure functions over a
 // plain state object, so tests and Step 3 can compare behaviour. A small store keeps the state in localStorage, shared by
 // the public site and the admin panel in the same browser. It is a demo: nothing here is a security control.
+import { includedLine } from './chutney.js';
 import { getPickupOptions, noticeText, ukParts } from './pickup.js';
 import { siteConfig } from './site-config.js';
 import { toWhatsAppNumber } from './whatsapp.js';
-import { SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateWindows, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from './admin-rules.js';
+import { cleanChutneyTiers, validateChutneyTiers, SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateWindows, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from './admin-rules.js';
 
 export const STORE_KEY = 'ss-store-v2';
 export const STATUSES = ['new', 'confirmed', 'ready', 'collected', 'cancelled'];
@@ -54,7 +55,7 @@ export function fullPickupDates(state, from, to) {
 // Public: what the cart needs to know.
 export function publicState(state) {
   const s = state.settings;
-  return { orderingOpen: s.ordering_open, closedMessage: s.ordering_closed_message, fullDates: fullPickupDates(state), customMinLeadHours: s.custom_min_lead_hours };
+  return { orderingOpen: s.ordering_open, closedMessage: s.ordering_closed_message, fullDates: fullPickupDates(state), customMinLeadHours: s.custom_min_lead_hours, chutneyTiers: s.included_chutney_tiers || [] };
 }
 
 // Orders for the admin list. Orders without a pickup date are always included.
@@ -109,7 +110,7 @@ export function prepList(state, from, to) {
 // ---------- stock ----------
 const standardQty = (order) => {
   const map = new Map();
-  for (const l of order.items) if (!l.customised && !l.is_preorder) map.set(l.slug, (map.get(l.slug) || 0) + l.qty);
+  for (const l of order.items) if (!l.customised && !l.is_preorder && !l.is_included) map.set(l.slug, (map.get(l.slug) || 0) + l.qty);
   return map;
 };
 const productOf = (state, slug) => state.products.find((p) => p.slug === slug);
@@ -217,6 +218,9 @@ export function placeOrder(state, input, now = new Date()) {
     if (s.max_orders_per_day != null && ordersOnDay(state, pickupDate) >= s.max_orders_per_day) throw new RuleError('day_full', 'That day is full. Please choose another day.');
   }
 
+  // the free chutney pot: one with every order that has a pack (D-072); no price, no stock
+  const free = includedLine(lines.map((l) => ({ kind: productOf(state, l.slug)?.kind, qty: l.qty })), s.included_chutney_tiers);
+  if (free) lines.push({ slug: 'free-chutney-pot', name: free.name, unit_label: free.label, qty: 1, unit_price_pence: 0, options: [], customised: false, is_preorder: false, is_included: true, ready_from: null });
   const order = insertOrder(state, {
     lines, name, phone: phoneRaw, notes: String(input.notes || '').trim().slice(0, limits.notesMax),
     pickupDate, pickupTime: pickupDate ? pickupTime : null, source: manual ? 'manual' : 'website', now,
@@ -276,6 +280,9 @@ export function saveSettings(state, patch) {
       if (value === null && spec.optional) state.settings[key] = null;
       else if (Number.isInteger(value) && value >= spec.min && value <= spec.max) state.settings[key] = value;
       else throw new RuleError('setting', `${spec.label}: enter a number from ${spec.min} to ${spec.max}.`);
+    } else if (key === 'included_chutney_tiers') {
+      const problem = validateChutneyTiers(value); if (problem) throw new RuleError('setting', problem);
+      state.settings.included_chutney_tiers = cleanChutneyTiers(value);
     } else if (key in SETTING_LIMITS) state.settings[key] = String(value ?? '').slice(0, SETTING_LIMITS[key]);
     else throw new RuleError('setting', `Unknown setting: ${key}`);
   }
@@ -309,7 +316,7 @@ function addSampleOrders(state, now) {
   const line = (slug, qty, optionIds = []) => buildLine(state, { slug, qty, options: optionIds });
   const samples = [
     { name: 'Sample: Asha', phone: '07700 900101', status: 'new', date: d1, time: '10:30', lines: [line('chicken-momo', 2), line('veg-momo', 1)], notes: '' },
-    { name: 'Sample: Bikash', phone: '07700 900102', status: 'new', date: d1, time: '12:15', lines: [line('chicken-momo', 2, ['no-onion', 'hot']), line('hot-sauce-pot', 1)], notes: 'Please ring on arrival.' },
+    { name: 'Sample: Bikash', phone: '07700 900102', status: 'new', date: d1, time: '12:15', lines: [line('chicken-momo', 2, ['no-onion', 'hot']), line('chutney-pot', 1)], notes: 'Please ring on arrival.' },
     { name: 'Sample: Chandra', phone: '07700 900103', status: 'confirmed', date: d1, time: '14:00', lines: [line('veg-momo', 3)], notes: '' },
     { name: 'Sample: Dipa', phone: '07700 900104', status: 'ready', date: d2, time: '11:00', lines: [line('chicken-momo', 1), line('chutney-pot', 2)], notes: '' },
     { name: 'Sample: Eshan', phone: '07700 900105', status: 'cancelled', date: d2, time: '16:30', lines: [line('veg-momo', 2)], notes: '' },

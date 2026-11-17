@@ -290,3 +290,25 @@ export function validatePreorder(p, todayIso) {
   if (limit !== null && limit !== undefined && limit !== '' && !(Number.isInteger(Number(limit)) && Number(limit) >= 1 && Number(limit) <= 1000)) return 'The limit must be a whole number from 1 to 1000, or left empty.';
   return null;
 }
+
+// ---------- Free chutney pot sizes (D-072) ----------
+// Rows of { min_packs, label }, empty by default. Each row: a whole number of packs from 1, a plain-text label. No two rows start at the same number.
+export const CHUTNEY_LABEL_MAX = 30;
+export const CHUTNEY_TIERS_MAX = 10;
+export function cleanChutneyTiers(list) {
+  return (Array.isArray(list) ? list : []).map((t) => ({ min_packs: Number(t.min_packs), label: String(t.label ?? '').trim().replace(/\s+/g, ' ') })).sort((a, b) => a.min_packs - b.min_packs);
+}
+export function validateChutneyTiers(list) {
+  const rows = Array.isArray(list) ? list : [];
+  if (rows.length > CHUTNEY_TIERS_MAX) return `At most ${CHUTNEY_TIERS_MAX} sizes.`;
+  const seen = new Set();
+  for (const t of rows) {
+    const n = Number(t.min_packs); const label = String(t.label ?? '').trim();
+    if (!Number.isInteger(n) || n < 1 || n > 100) return 'Each size needs a number of packs from 1 to 100.';
+    if (!label) return 'Each size needs a label, for example Small.';
+    if (label.length > CHUTNEY_LABEL_MAX) return `A size label can be at most ${CHUTNEY_LABEL_MAX} characters.`;
+    if (seen.has(n)) return `Two sizes start at ${n} packs.`;
+    seen.add(n);
+  }
+  return null;
+}

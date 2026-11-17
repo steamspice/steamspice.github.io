@@ -305,6 +305,22 @@ update products set preorder_enabled = false, preorder_ready_date = null, preord
 update product_stock set quantity = 2 where product_id = (select id from products where slug = 'veg-momo');
 update settings set value = '24' where key = 'min_lead_hours';
 
+-- ===== free chutney pot (Step 4r, D-072) =====
+update product_stock set quantity = 10 where product_id in (select id from products where slug in ('chicken-momo', 'veg-momo'));
+update products set price_pence = 150, active = true, available = true where slug = 'chutney-pot';
+select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 1))$$, $$select (select count(*) from orders o, jsonb_array_elements(o.items) l where o.id = (select id from orders order by created_at desc limit 1) and (l ->> 'is_included')::boolean) = 1 and (select total_pence from orders order by created_at desc limit 1) = 1000$$), 'an order with a pack gets one free chutney pot line and the total does not change');
+select t.chk(t.seq($$select t.place(t.order_json('chutney-pot', 1))$$, $$select not exists (select 1 from jsonb_array_elements((select items from orders order by created_at desc limit 1)) l where (l ->> 'is_included')::boolean)$$), 'an order with only extra chutney pots gets no free pot');
+insert into settings (key, value) values ('included_chutney_tiers', '[{"min_packs":1,"label":"Small"},{"min_packs":3,"label":"Large"}]') on conflict (key) do update set value = excluded.value;
+select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 3))$$, $$select (select l ->> 'unit_label' from orders o, jsonb_array_elements(o.items) l where o.id = (select id from orders order by created_at desc limit 1) and (l ->> 'is_included')::boolean) = 'Large'$$), 'the size label is the row with the highest min_packs not above the pack count');
+select t.chk(t.seq($$select t.place(t.order_json('chicken-momo', 1))$$, $$select (select l ->> 'unit_label' from orders o, jsonb_array_elements(o.items) l where o.id = (select id from orders order by created_at desc limit 1) and (l ->> 'is_included')::boolean) = 'Small'$$), 'one pack gives the first row');
+select t.chk(t.count('anon', null, $$select 1 from settings where key = 'included_chutney_tiers'$$) = 1, 'anon can read the free chutney sizes');
+create temp table fc as select id from orders where (items -> 0 ->> 'slug') = 'chicken-momo' order by created_at desc limit 1;
+select t.chk(t.seq(format('select public._set_order_status(%L, ''cancelled'')', (select id from fc)), $$select (select status from orders where id = (select id from fc)) = 'cancelled'$$), 'cancelling an order with a free pot works and the pot is ignored');
+select t.chk(t.seq(format('select public._set_order_status(%L, ''new'')', (select id from fc)), $$select (select status from orders where id = (select id from fc)) = 'new'$$), 're-opening ignores the free pot too');
+delete from settings where key = 'included_chutney_tiers';
+update products set price_pence = null, active = false, available = false where slug = 'chutney-pot';
+update product_stock set quantity = 2 where product_id = (select id from products where slug = 'veg-momo');
+
 -- ===== catalogue (Step 4l) =====
 select t.chk(not exists (
   select 1 from products p where

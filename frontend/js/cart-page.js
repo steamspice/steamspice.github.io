@@ -1,4 +1,5 @@
 // Cart page: lines, totals, details (name and phone required), pickup date and time, place order. Customer text is only ever written with textContent.
+import { includedLine } from './chutney.js';
 import './menu.js';
 import { buildLines, cartTotal, formatPrice, getCart, lineKey, updateHeaderCount } from './cart.js';
 import { loadPickup, loadProducts } from './data.js';
@@ -26,6 +27,7 @@ const phoneInput = $('#f-phone');
 let products = [];
 let pickupOptions = [];
 let pickupConfig = null;
+let chutneyTiers = []; // the free pot size list she edits (D-072)
 let closedDates = []; // pickup days that have reached the daily order limit
 
 const el = (tag, cls, text) => {
@@ -113,6 +115,11 @@ function render() {
     li.append(remove);
     list.append(li);
   }
+  // The free chutney pot: shown under the items when the cart has a pack; free, not counted in the total.
+  const free = includedLine(lines.filter((l) => !l.unavailable).map((l) => ({ kind: l.product && l.product.kind, qty: l.qty })), chutneyTiers);
+  const freeBox = $('[data-free-chutney]');
+  freeBox.hidden = !free;
+  freeBox.textContent = free ? `Free chutney pot, included with your order${free.label ? ` (${free.label.toLowerCase()})` : ''} \u2014 Free` : '';
   $('[data-cart-total]').textContent = formatPrice(cartTotal(lines));
   refreshPickup(lines);
 }
@@ -220,7 +227,9 @@ async function confirm(e) {
   if (!lines.length) { render(); errorBox.textContent = 'There is nothing available in your cart.'; return; }
   const order = readOrder(lines);
   const totalPence = cartTotal(lines);
-  const summary = lines.map((l) => ({ qty: l.qty, name: l.product.name, unitLabel: l.product.unit_label, linePence: l.linePence, optionText: l.customised ? l.optionText : '', preorderReadyFrom: l.preorder ? l.readyFrom : null }));
+  const summary = lines.map((l) => ({ qty: l.qty, name: l.product.name, unitLabel: l.product.unit_label, linePence: l.linePence, optionText: l.customised ? l.optionText : '', kind: l.product.kind, preorderReadyFrom: l.preorder ? l.readyFrom : null }));
+  const free = includedLine(summary, chutneyTiers);
+  if (free) summary.push({ qty: 1, name: free.name, unitLabel: free.label || '', linePence: 0, optionText: '', included: true });
   setBusy(true);
   try {
     const result = await submitOrder({ ...order, totalPenceHint: totalPence });
@@ -254,6 +263,7 @@ async function init() {
     pickupConfig = await loadPickup();
     const state = await getOrderingState();
     closedDates = state.fullDates;
+    chutneyTiers = state.chutneyTiers || [];
     if (!state.orderingOpen) { // ordering is paused: the cart says so and Place order stays off
       const note = $('[data-pause-note]');
       note.textContent = state.closedMessage;

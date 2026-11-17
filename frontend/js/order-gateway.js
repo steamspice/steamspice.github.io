@@ -51,12 +51,12 @@ const supabaseGateway = {
     throw new Error(`place-order: ${res.status}`);
   },
   async state(config) {
-    const open = { orderingOpen: true, closedMessage: '', fullDates: [], customMinLeadHours: config.customMinLeadHours };
+    const open = { orderingOpen: true, closedMessage: '', fullDates: [], customMinLeadHours: config.customMinLeadHours, chutneyTiers: [] };
     try {
-      const keys = 'ordering_open,ordering_closed_message,custom_min_lead_hours';
+      const keys = 'ordering_open,ordering_closed_message,custom_min_lead_hours,included_chutney_tiers';
       const [rows, full] = await Promise.all([restGet(`settings?select=key,value&key=in.(${keys})`, config), rpc('full_pickup_dates', {}, config).catch(() => [])]);
       const s = settingsMap(rows);
-      return { orderingOpen: s.ordering_open !== false, closedMessage: s.ordering_closed_message || '', fullDates: Array.isArray(full) ? full : [], customMinLeadHours: Number(s.custom_min_lead_hours) || config.customMinLeadHours };
+      return { orderingOpen: s.ordering_open !== false, closedMessage: s.ordering_closed_message || '', fullDates: Array.isArray(full) ? full : [], customMinLeadHours: Number(s.custom_min_lead_hours) || config.customMinLeadHours, chutneyTiers: Array.isArray(s.included_chutney_tiers) ? s.included_chutney_tiers : [] };
     } catch { return open; } // if the settings cannot be read the cart stays usable; the function still enforces every rule
   },
 };

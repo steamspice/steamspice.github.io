@@ -3,7 +3,7 @@
 // and the signed-in admin's own session; the database checks is_admin() on every request.
 import { siteConfig } from '../../js/site-config.js';
 import { prepList as computePrep } from '../../js/mock-backend.js';
-import { SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from '../../js/admin-rules.js';
+import { cleanChutneyTiers, validateChutneyTiers, SETTING_FIELDS, slugify, validateAllergenName, validateChecked, validateException, validateGroup, validateIngredients, validatePhoto, validatePreorder, validateProduct, validateRule, validateSlot } from '../../js/admin-rules.js';
 
 import { backoffSeconds, LIVE_FLAG_AFTER_SECONDS, recordLive } from './live-feed.js';
 
@@ -128,6 +128,7 @@ export const supabaseApi = {
         if (value === null && spec.optional) clear.push(key); // no row means no limit
         else if (Number.isInteger(value) && value >= spec.min && value <= spec.max) rows.push({ key, value });
         else refuse(`${spec.label}: enter a number from ${spec.min} to ${spec.max}.`);
+      } else if (key === 'included_chutney_tiers') { const problem = validateChutneyTiers(value); if (problem) refuse(problem); rows.push({ key, value: cleanChutneyTiers(value) });
       } else if (key in SETTING_LIMITS) rows.push({ key, value: String(value ?? '').slice(0, SETTING_LIMITS[key]) });
       else refuse(`Unknown setting: ${key}`);
     }

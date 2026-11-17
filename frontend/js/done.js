@@ -37,7 +37,7 @@ if (order) {
     }
     const price = document.createElement('span');
     price.className = 'receipt-price';
-    price.textContent = formatPrice(l.linePence);
+    price.textContent = l.included ? 'Free' : formatPrice(l.linePence);
     li.append(qty, name, price);
     list.append(li);
   }
@@ -53,7 +53,7 @@ if (order) {
     const text = [
       'STEAM & SPICE', 'Order receipt', `No. ${number}`, order.placedAt ? placedText(order.placedAt) : '', '-'.repeat(w),
       `Name: ${order.name || '-'}`, `Pickup: ${order.pickup || 'To be agreed'}`, '-'.repeat(w),
-      ...order.lines.flatMap((l) => [row(`${l.qty} x ${l.name}`, formatPrice(l.linePence)), ...(l.optionText ? [`   Customised: ${l.optionText}`] : []), ...(l.preorderReadyFrom ? [`   Pre-order, ready from ${shortDateLabel(l.preorderReadyFrom)}`] : [])]),
+      ...order.lines.flatMap((l) => [row(`${l.qty} x ${l.name}`, l.included ? 'Free' : formatPrice(l.linePence)), ...(l.optionText ? [`   Customised: ${l.optionText}`] : []), ...(l.preorderReadyFrom ? [`   Pre-order, ready from ${shortDateLabel(l.preorderReadyFrom)}`] : [])]),
       '-'.repeat(w), row('TOTAL', formatPrice(order.totalPence)), '-'.repeat(w),
       'Pickup only. Pay cash when you pick up.', 'Not confirmed until we message you.', '',
     ].filter((x, i) => x !== '' || i > 4).join('\n');

@@ -115,6 +115,7 @@ function dialogHtml(p) {
         <h2 id="dlg-${esc(p.slug)}-title">${esc(p.name)}</h2>
         <p class="card-meta">${esc(p.unit_label)}</p>
         ${priceBlock(p)}
+        ${freeChutneyLine(p)}
       </div>
       <button type="button" class="dialog-close" data-dialog-close aria-label="Close"><svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 L19 19 M19 5 L5 19"/></svg></button>
     </div>
@@ -130,6 +131,9 @@ function dialogHtml(p) {
   </div>
 </dialog>`;
 }
+
+// Every pack comes with one free chutney pot (D-072). Nothing about its size is claimed here.
+const freeChutneyLine = (p) => (p.kind === 'pack' ? '<p class="free-line">Comes with a free chutney pot</p>' : '');
 
 function card(p) {
   const priced = p.price_pence != null;
@@ -152,6 +156,7 @@ function card(p) {
     <h3><a class="card-link" href="shop#product-${esc(p.slug)}" data-card-open>${esc(p.name)}</a></h3>
     <p class="card-meta">${esc(p.unit_label)}${p.available ? '' : ' <span class="badge badge-unavailable">Unavailable</span>'}</p>
     ${priceBlock(p)}
+    ${freeChutneyLine(p)}
     ${action}
   </div>
   ${dialogHtml(p)}

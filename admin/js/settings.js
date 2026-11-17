@@ -6,7 +6,7 @@ import { api } from './shell.js';
 import { readLive } from './live-feed.js';
 import { clearLogin } from './session.js';
 import { confirmDialog, el, field, makeSwitch, toast } from './dom.js';
-import { SETTING_FIELDS, hoursHint, parseSettings } from '../../js/admin-rules.js';
+import { CHUTNEY_LABEL_MAX, CHUTNEY_TIERS_MAX, SETTING_FIELDS, cleanChutneyTiers, hoursHint, parseSettings, validateChutneyTiers } from '../../js/admin-rules.js';
 import { mountAllergenManager, LEGAL_REMINDER } from './allergens.js';
 import { askNotificationPermission, notificationState, playSoftSound, setSound, soundOn } from './alerts.js';
 
@@ -55,15 +55,33 @@ function buildOrdering() {
   fields.order_prefix = field('Order number prefix', 'text', { value: settings.order_prefix ?? 'SS', maxLength: 6, hint: 'Capital letters. Order numbers look like SS-1311-01.' });
   grid.append(fields.order_prefix.wrap);
   const errors = errorLine();
+  // the free chutney pot size list (D-072): "From N packs: label", empty by default
+  let tiers = cleanChutneyTiers(settings.included_chutney_tiers).map((t) => ({ min_packs: String(t.min_packs), label: t.label }));
+  const tierRows = el('div', { className: 'tier-rows' });
+  const drawTiers = () => {
+    tierRows.replaceChildren(...tiers.map((t, i) => {
+      const n = el('input', { type: 'text', value: t.min_packs, inputMode: 'numeric', 'aria-label': `Packs for size ${i + 1}`, oninput: () => { t.min_packs = n.value; } });
+      const l = el('input', { type: 'text', value: t.label, maxLength: CHUTNEY_LABEL_MAX, 'aria-label': `Label for size ${i + 1}`, oninput: () => { t.label = l.value; } });
+      return el('div', { className: 'tier-row' }, el('label', {}, 'From (packs)', n), el('label', {}, 'Label', l),
+        el('button', { type: 'button', className: 'btn btn-secondary btn-small', 'aria-label': `Remove size ${i + 1}`, onclick: () => { tiers.splice(i, 1); drawTiers(); } }, 'Remove'));
+    }));
+    if (!tiers.length) tierRows.append(el('p', { className: 'muted' }, 'No sizes yet. Customers see just "Free chutney pot".'));
+  };
+  drawTiers();
+  const addTier = el('button', { type: 'button', className: 'btn btn-secondary btn-small', onclick: () => { if (tiers.length < CHUTNEY_TIERS_MAX) { tiers.push({ min_packs: '', label: '' }); drawTiers(); tierRows.querySelector('.tier-row:last-child input').focus(); } } }, 'Add a size');
+  const tierCard = card('Free chutney pot size', el('p', {}, 'One chutney pot comes free with every order that has a pack. If the pot size grows with the order, add the sizes here. Leave empty to show just "Free chutney pot".'), tierRows, el('div', { className: 'btn-row' }, addTier));
   return {
     nodes: [card('Pause ordering', el('p', {}, 'When paused, the public cart shows your message and cannot place an order. The pause is live at once when you save.'), pause.row, message.wrap),
-      card('Ordering rules', el('p', {}, 'How much notice you need, how far ahead customers can choose, and how many orders you take each day.'), grid, errors)],
-    values: () => ({ paused: pause.get(), message: message.control.value, ...Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.control.value])) }),
+      card('Ordering rules', el('p', {}, 'How much notice you need, how far ahead customers can choose, and how many orders you take each day.'), grid, errors), tierCard],
+    values: () => ({ paused: pause.get(), message: message.control.value, tiers, ...Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.control.value])) }),
     async save() {
       errors.textContent = '';
       const result = parseSettings(Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.control.value])));
       if (!result.ok) { errors.textContent = Object.values(result.errors).join(' '); errors.scrollIntoView({ block: 'center', behavior: 'smooth' }); throw new Error('Check the numbers on this page.'); }
-      await api.saveSettings({ ...result.patch, ordering_open: !pause.get(), ordering_closed_message: message.control.value });
+      const rows = tiers.map((t) => ({ min_packs: Number(t.min_packs), label: t.label }));
+      const problem = validateChutneyTiers(rows);
+      if (problem) { errors.textContent = problem; throw new Error(problem); }
+      await api.saveSettings({ ...result.patch, ordering_open: !pause.get(), ordering_closed_message: message.control.value, included_chutney_tiers: rows });
     },
   };
 }

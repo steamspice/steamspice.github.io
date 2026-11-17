@@ -27,7 +27,6 @@ If this file and `docs/decisions-log.md` disagree, the decisions log wins.
 | Frozen chicken momo | 40 pieces | £10 |
 | Frozen veg momo | 40 pieces | £10 |
 | Spicy tomato chutney (small pot) | add-on | price to be confirmed |
-| Hot sauce (small pot) | add-on | price to be confirmed |
 
 ## Brand (placeholder)
 

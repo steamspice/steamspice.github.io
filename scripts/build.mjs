@@ -87,6 +87,7 @@ if (hasChutney) {
   await sharp(chutneyFile).resize({ width: 400, withoutEnlargement: true }).webp({ quality: 82 }).toFile(join(dist, 'assets/img/photo-chutney-400.webp'));
   for (const p of products) if (p.slug === 'chutney-pot' && !p.photo) { p.photo = 'photo-chutney'; p.photo_alt ??= 'A bowl of homemade turmeric yellow chutney'; }
 }
+const CHUTNEY_ART = '<div class="sauce-art card-art card-art-bowl" aria-hidden="true"></div>'; // the drawn placeholder until the owner supplies a yellow chutney photo
 const CHUTNEY_FIGURE = '<figure class="sauce-figure"><img class="photo-frame sauce-photo" src="assets/img/photo-chutney.webp" width="400" height="400" alt="A bowl of homemade turmeric yellow chutney" loading="lazy"><figcaption>Chutney</figcaption></figure>';
 
 // The public config values go into the built site-config.js (the publishable key is public by design).
@@ -124,7 +125,7 @@ for (const file of htmlFiles) {
     // Instagram line: a real link once the constant is set, otherwise the line stays empty and hidden (D-052).
     const ig = siteConfig.socialLinks.instagram;
     if (ig) html = html.replace(INSTAGRAM_RE, `<!-- build:instagram --><a class="contact-item" href="${escAttr(ig)}" rel="noopener">${INSTAGRAM_GLYPH}Instagram</a><!-- /build:instagram -->`);
-    if (rel === 'index.html') html = html.replace(/<!-- build:chutney-photo -->[\s\S]*?<!-- \/build:chutney-photo -->/, `<!-- build:chutney-photo -->${hasChutney ? CHUTNEY_FIGURE : ''}<!-- /build:chutney-photo -->`);
+    if (rel === 'index.html') html = html.replace(/<!-- build:chutney-photo -->[\s\S]*?<!-- \/build:chutney-photo -->/, `<!-- build:chutney-photo -->${hasChutney ? CHUTNEY_FIGURE : CHUTNEY_ART}<!-- /build:chutney-photo -->`);
     if (products.length) html = fillRegion(html, renderRegion(page === 'index' ? 'index' : 'shop', products, siteUrl));
     // SEO region: canonical, og:url, og:image, and Organization data on the home page.
     const seo = [

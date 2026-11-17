@@ -2,7 +2,7 @@
 
 The coding agent updates this file at the end of every phase (see `docs/usage-rules.md` section 7). Trust it instead of re-exploring the repository. Edit only the lines that changed.
 
-- Last updated: 2026-11-17 (Step 4q, coding agent)
+- Last updated: 2026-11-17 (Step 4r, coding agent)
 - Current step: **Step 4d built and merged. Waiting for the owner: backend setup (`backend/README.md` section 3) and the live checks**
 - Next action: owner finishes `backend/README.md` and tests the admin on the live site; then Step 4f (admin visual style from the approved reference and Products redesign, D-061), then Step 4g (editable allergens and ingredients, Save bar fix, D-062), then Step 4h (weekly pickup hours redesign, D-063), then Step 4i (admin sales summary, D-064), then Step 4j (Realtime connection fix), then Step 4n (admin fixes round: product editor back to one page, Settings hub look and back path, notice-period modal, red allergen navigation, order More menu, Publish wording; 4m is folded into it), Step 4o (blurred colour patches on the public site, D-067), Step 4p (new logo everywhere D-068, sauce pictures D-069, repo address default D-070), Step 4q (messaging fallback, same-day pickup, stock labels, pre-orders, D-071), Step 4r (free chutney with every order, hot sauce removed, D-072), Step 4s (ingredient pills, one customisation fee, change password, D-073; run before 4l), Step 4l (catalogue: categories, reusable options, allergens by product, D-065), then Step 5 (SEO, hardening, launch).
 
@@ -239,6 +239,13 @@ Legend: `[ ]` not done, `[x]` done. For every ticked item add: commit hash, one-
 - [x] Orders cards per the reference (Confirm and More on one row; Message customer moved into More); Home, Prep, Pickup, Settings use the kit through shared CSS
 - [ ] Owner checks: press feel, toggles, glass bars over cards, patches on all pages, a real product save, the publish banner
 
+## Step 4r — Free chutney with every order, no hot sauce (D-072)
+
+- [x] Hot sauce removed (seed, demo, shop and home regions, tile copy, how-to-cook, docs); migration 0014 hides the live product (inactive, unavailable, stock row removed; not deleted). The red `photo-sauce.webp` is unused; the home tile shows the drawn bowl until `photo-chutney.webp` exists.
+- [x] Customers: "Comes with a free chutney pot" on pack cards and dialogs; cart line "Free chutney pot, included with your order (label) — Free"; receipt, order card, WhatsApp summary.
+- [x] Setting `included_chutney_tiers` (public, empty by default), edited under Settings, Ordering, "Free chutney pot size"; `chutney.js` holds the rule.
+- [x] Order function (migration 0014) adds one `is_included` line for every order with a pack; no effect on totals, stock, or cancel and re-open. Database tests cover it.
+
 ## Step 4q — Messaging fallback, same-day pickup, stock labels, pre-orders (D-071)
 
 - [x] A: no blank window; on a phone the tab goes to the WhatsApp app (`whatsapp://`), on a computer the order shows an Open WhatsApp button; "Didn't go through?" strip (text message `sms:+NUMBER?&body=`, copy, Done) kept in sessionStorage; the Message button offers the same choices (`admin/js/message-panel.js`).
@@ -458,3 +465,5 @@ Legend: `[ ]` not done, `[x]` done. For every ticked item add: commit hash, one-
 - 2026-11-13, step 4l: build passes; database tests pass (effective groups, tampered or unlinked option refused, snapshot survives rename and delete, bulk allergens clear the check, RLS on the new tables, migration kept every product's options); build-supabase and mock-backend tests pass; Playwright at 390 px on the mock backend: Manage menu, categories, options library and applies-to, editor options card and Create new group, category filter, allergens bulk and summary. Not checked: real Supabase (migrations 0011 and 0012 applied by the workflow).
 
 - 2026-11-17, step 4q (demo backend only): build passes; database tests pass (same-day pickup, pre-order rules, limit, cancel and re-open leave stock alone); mock-backend, pickup, admin-rules, regions, build-supabase, launch-gate tests pass; Playwright at 390 px: pre-order card and cart (earliest line, ready-date floor), order card badge and return strip, sms link form, invalid-phone strip. Not checked: real WhatsApp, the phone app hand-off and return, real Supabase.
+
+- 2026-11-17, step 4r (demo backend only): build passes; database tests pass (free pot line, only-chutney order, tier label, cancel and re-open); mock-backend, regions, build-supabase, admin-rules, launch-gate tests pass; Playwright at 390 px: shop without hot sauce, cart with and without a size label, sizes editor, receipt. Not checked: real Supabase.

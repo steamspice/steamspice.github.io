@@ -9,7 +9,7 @@ const UK_NUMBER_RE = /^44\d{9,10}$/;
 export function buildMessage({ orderNumber, lines, totalPence, pickup, name, phone, notes }) {
   const out = [orderNumber ? `Hi! Order ${orderNumber}` : "Hi! I'd like to place an order"];
   for (const l of lines) {
-    out.push(`- ${l.qty} x ${l.name}${l.unitLabel ? ` (${l.unitLabel})` : ''} ${formatPrice(l.linePence)}`);
+    out.push(`- ${l.qty} x ${l.name}${l.unitLabel ? ` (${l.unitLabel})` : ''} ${l.included ? 'Free' : formatPrice(l.linePence)}`);
     if (l.optionText) out.push(`  Customised: ${l.optionText}`);
   }
   out.push(`Total ${formatPrice(totalPence)}`);

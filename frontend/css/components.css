@@ -386,3 +386,5 @@ html:has(dialog[open]) { overflow: hidden; }
 .ingredient-list li:not(:last-child)::after { content: ","; }
 .preorder-line { margin: 0 0 var(--space-2xs); font-size: var(--text-small); font-weight: 700; color: var(--emerald); }
 .preorder-line[hidden] { display: none; }
+.free-line { margin: 0 0 var(--space-2xs); font-size: var(--text-small); font-weight: 600; color: var(--emerald); }
+.free-line-cart { margin-block: var(--space-xs); }

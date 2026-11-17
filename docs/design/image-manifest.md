@@ -15,12 +15,11 @@ Status: v2, 2026-11-10 (hero replaced). All images are in `frontend/assets/img/`
 | `cutout-hero.webp` (+ `-600`) | 1200 x 1200 | cut-out | Hero panel | "A bamboo steamer filled with freshly steamed momo" |
 | `cutout-momo.webp` (+ `-400`) | 800 x 800 | cut-out | "Buy. Steam. Eat." section | "A single pleated momo" |
 | `cutout-chutney.webp` (+ `-400`) | 800 x 800 | cut-out | Sauce tile; card for `chutney-pot` | "A small pot of turmeric-yellow chutney" |
-| `cutout-hot-sauce.webp` (+ `-400`) | 800 x 800 | cut-out | Card for `hot-sauce-pot`; sauce tile | "A small pot of red hot sauce with chilli seeds" |
 | `cutout-step-finished.webp` (+ `-300`) | 600 x 600 | cut-out | Spare (a finished momo) | "A finished, pleated momo" |
 | `pack-chicken.webp` (+ `-400`) | 800 x 800 | multiply | Product card, slug `chicken-momo` | "A bag of frozen momo tied with twine and a blank paper tag" |
 | `pack-veg.webp` (+ `-400`) | 800 x 800 | multiply | Product card, slug `veg-momo` | same wording |
 | `photo-kitchen-corner.webp` (+ `-800`) | 1024 x 687 | scene | Made-together band, how to cook | "A home kitchen corner with a brick wall, wooden counter and a bamboo steamer" |
-| `photo-sauce.webp` (+ `-400`, a copy at the same size) | 335 x 335 | scene (real photo, owner-supplied) | Home sauce tile (framed, caption "Hot sauce") and the card of `hot-sauce-pot` | "A bowl of homemade red hot sauce" |
+| `photo-sauce.webp` (+ `-400`) | 335 x 335 | scene (real photo, owner-supplied) | **Unused** (D-072): there is no hot sauce, and the chutney is turmeric yellow. Kept in the repo until the owner says what it is. | not shown |
 | `photo-chutney.webp` | owner to supply | scene (real photo) | Home sauce tile (second frame, caption "Chutney") and the card of `chutney-pot`; the build uses it as soon as the file exists | "A bowl of homemade turmeric yellow chutney" (owner to supply, turmeric yellow) |
 | `photo-plate.webp` (+ `-800`) | 1024 x 687 | scene | Spare (banner or shop header) | "A plate of steamed momo with a small bowl of red sauce" |
 

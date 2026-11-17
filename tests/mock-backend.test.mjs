@@ -274,3 +274,31 @@ test('pre-order validation in plain words', () => {
   assert.equal(validatePreorder({ preorder_enabled: true, preorder_ready_date: '2026-11-20', preorder_limit: '' }, '2026-11-17'), null);
   assert.equal(validatePreorder({ preorder_enabled: false }, '2026-11-17'), null);
 });
+
+// Step 4r: free chutney pot (D-072)
+import { chutneyLabel } from '../frontend/js/chutney.js';
+import { validateChutneyTiers } from '../frontend/js/admin-rules.js';
+test('free chutney: one with every order that has a pack, never in the total, never in stock; the label follows her list', () => {
+  const s = buildInitialState({ products: read('products.seed.json'), pickup: read('pickup.seed.json') }, new Date('2026-11-13T12:00:00Z'));
+  const now = new Date('2026-11-13T12:00:00Z');
+  const chutney = s.products.find((p) => p.slug === 'chutney-pot'); chutney.price_pence = 150; chutney.available = true;
+  const go = (items) => { placeOrder(s, { items, name: 'T', phone: '07700 900123' }, now); return s.orders.at(-1); };
+  let o = go([{ slug: 'chicken-momo', qty: 2 }]);
+  assert.equal(o.items.filter((l) => l.is_included).length, 1); assert.equal(o.total_pence, 2000); assert.equal(o.items.at(-1).name, 'Free chutney pot'); assert.equal(o.items.at(-1).unit_label, null);
+  o = go([{ slug: 'chutney-pot', qty: 1 }]);
+  assert.equal(o.items.some((l) => l.is_included), false);
+  saveSettings(s, { included_chutney_tiers: [{ min_packs: 3, label: 'Large' }, { min_packs: 1, label: 'Small' }] });
+  assert.equal(go([{ slug: 'chicken-momo', qty: 3 }]).items.at(-1).unit_label, 'Large');
+  assert.equal(go([{ slug: 'veg-momo', qty: 1 }]).items.at(-1).unit_label, 'Small');
+  const stock = s.products.find((p) => p.slug === 'veg-momo').stock_quantity;
+  setOrderStatus(s, s.orders.at(-1).id, 'cancelled', now);
+  assert.equal(s.products.find((p) => p.slug === 'veg-momo').stock_quantity, stock + 1);
+});
+test('free chutney sizes: the highest row not above the pack count; validation in plain words', () => {
+  const tiers = [{ min_packs: 1, label: 'Small' }, { min_packs: 4, label: 'Large' }];
+  assert.equal(chutneyLabel(2, tiers), 'Small'); assert.equal(chutneyLabel(4, tiers), 'Large'); assert.equal(chutneyLabel(1, []), null); assert.equal(chutneyLabel(0, tiers), null);
+  assert.match(validateChutneyTiers([{ min_packs: 1, label: '' }]), /label/);
+  assert.match(validateChutneyTiers([{ min_packs: 2, label: 'A' }, { min_packs: 2, label: 'B' }]), /Two sizes/);
+  assert.match(validateChutneyTiers([{ min_packs: 0, label: 'A' }]), /packs/);
+  assert.equal(validateChutneyTiers([]), null);
+});

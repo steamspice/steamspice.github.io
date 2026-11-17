@@ -157,7 +157,7 @@ function card(order) {
       order.source === 'manual' ? el('span', { className: 'tag tag-manual' }, 'Manual') : null, badge),
     el('p', { className: 'pickup-line' }, whenShort(order), customised ? el('span', { className: 'tag tag-custom' }, 'Customised') : null, preorderReady ? el('span', { className: 'tag tag-preorder' }, `PRE-ORDER, ready from ${shortDate(preorderReady)}`) : null),
     el('p', { className: 'order-who' }, el('span', { className: 'person-icon', 'aria-hidden': 'true' }), el('strong', {}, order.customer_name || 'No name'), order.customer_phone ? el('a', { href: `tel:${order.customer_phone.replace(/[^\d+]/g, '')}` }, order.customer_phone) : null),
-    el('ul', { className: 'order-lines' }, ...order.items.map((l) => el('li', {}, `${l.qty} × ${l.name}`, l.is_preorder ? el('span', { className: 'opts' }, `Pre-order, ready from ${shortDate(l.ready_from)}`) : null, l.options.length ? el('span', { className: 'opts' }, l.options.map((o) => o.label).join(', ')) : null))),
+    el('ul', { className: 'order-lines' }, ...order.items.map((l) => el('li', {}, `${l.qty} × ${l.name}${l.is_included && l.unit_label ? ` (${l.unit_label.toLowerCase()})` : ''}`, l.is_included ? el('span', { className: 'opts' }, 'Included, free') : null, l.is_preorder ? el('span', { className: 'opts' }, `Pre-order, ready from ${shortDate(l.ready_from)}`) : null, l.options.length ? el('span', { className: 'opts' }, l.options.map((o) => o.label).join(', ')) : null))),
   );
   if (order.notes) article.append(el('p', { className: 'order-notes' }, `Note: ${order.notes}`));
 
