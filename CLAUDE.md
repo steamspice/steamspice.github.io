@@ -34,7 +34,7 @@ The planning chat (claude.ai) never writes code. It writes these docs and instru
 - **Never invent facts.** No cooking times, allergen details, reviews, ratings, addresses, hygiene ratings, awards, or story details. Where content is missing, put a visible `TODO:` placeholder, mark it `data-todo`, and list it in your report. **Exception (decision D-023):** for **prices, steam time and pickup hours only**, use obvious sample values instead, mark them `data-placeholder` (or `"placeholder": true` in seed data) with a visible "sample" label, and list them in your report. Allergens, storage and food-safety advice, pickup location and legal or health wording always stay `TODO:`.
 - **Do not look AI-generated.** See the UI rulebook: no purple, no gradients, no emoji icons, no rows of identical rounded cards.
 - **UK English only.** One language. Currency £.
-- **Relative paths** or paths built from `SITE_URL`. The site lives under `/momo/` now and moves to a custom domain later.
+- **Relative paths** or paths built from `SITE_URL`. The site lives at the root of `https://steamspice.github.io/` (admin at `/admin/`) and may move to a custom domain later; never hard-code the host or a base folder.
 - **Soft-coded and fluid, never hard-coded** (decision D-022). Sizes, spacing and type are fluid tokens in `theme.css`; pixel values live only in token definitions. Limits, timeouts and business values are named constants in one config place or the `settings` table. Details: `docs/ui-rulebook.md` section 2b and `docs/technical-rulebook.md` section 1.
 - **Stay in scope.** No delivery, card payments, customer accounts, WhatsApp Business API, analytics or tracking unless a step says so.
 - **Pickup only, cash on pickup.** Say so wherever an order is placed.

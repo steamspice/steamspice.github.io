@@ -9,8 +9,8 @@ Overview for humans. The detailed, authoritative documents are in `docs/`:
 
 If this file and `docs/decisions-log.md` disagree, the decisions log wins.
 
-- Repo: https://github.com/sarojaryal071-sudo/momo
-- Live (GitHub Pages): https://sarojaryal071-sudo.github.io/momo/
+- Repo: https://github.com/steamspice/steamspice.github.io
+- Live (GitHub Pages): https://steamspice.github.io/ (admin at /admin/)
 - Last updated: 2026-11-10
 
 ## The business

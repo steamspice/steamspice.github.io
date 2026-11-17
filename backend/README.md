@@ -27,7 +27,7 @@ The three **deploy** secrets (Supabase access token, database password, project 
 |---|---|---|---|
 | 1 | **GitHub fine-grained token**: only this repository, permission *Actions: Read and write*, nothing else | Supabase function secret `GITHUB_DISPATCH_TOKEN` | the Publish button starts the build |
 | 2 | **A random string** you make up (30+ characters), used twice | Supabase function secret `BUILD_STATUS_TOKEN` **and** GitHub repository *secret* (not variable) `BUILD_STATUS_TOKEN` | lets the build report "Live" or "Failed" to the admin. It can do nothing else |
-| 3 | The site's web address(es), for example `https://sarojaryal071-sudo.github.io` (no path) | Supabase function secret `ALLOWED_ORIGINS` (comma separated, add your own domain later) | only your site may call the order function |
+| 3 | The site's web address(es), for example `https://steamspice.github.io` (no path) | Supabase function secret `ALLOWED_ORIGINS` (comma separated, add your own domain later) | only your site may call the order function |
 
 There is **no email service** (D-056): no email key and no owner email anywhere. New orders reach you through the admin panel (it refreshes
 every minute and, from Step 4bc, shows new orders live). Optional secrets: `GITHUB_REPO`, `GITHUB_WORKFLOW`.
@@ -77,7 +77,7 @@ the functions with the CLI: `supabase functions deploy place-order trigger-rebui
 (`supabase link --project-ref mohkrxpdqtwnhzzmcxdw` first), or paste each `functions/<name>/index.ts` (and `_shared/validate.ts`) in the
 dashboard with "Verify JWT" off. Do not mix the two routes on one project: the workflow tracks which migrations it has applied.
 
-**Forgot password (D-059).** In Supabase, Authentication, **URL Configuration**: set the Site URL to `https://sarojaryal071-sudo.github.io/momo/` and add `https://sarojaryal071-sudo.github.io/momo/admin/reset` to the Redirect URLs. Supabase's built-in email sender only delivers to members of your Supabase organisation, so the reset email works for your own address now and for her only after a custom email sender is set up later.
+**Forgot password (D-059).** In Supabase, Authentication, **URL Configuration**: set the Site URL to `https://steamspice.github.io` and add `https://steamspice.github.ioadmin/reset` to the Redirect URLs. Supabase's built-in email sender only delivers to members of your Supabase organisation, so the reset email works for your own address now and for her only after a custom email sender is set up later.
 
 ## 4. Function secrets (one-time, in Supabase)
 

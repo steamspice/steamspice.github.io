@@ -37,3 +37,7 @@ Look at screenshots at 390 and 1440 px of home (header, footer, menu open), the 
 3. **Chutney picture:** the owner will add `frontend/assets/img/photo-chutney.webp` (turmeric yellow chutney) later, through this step or through the admin photo upload. Write the code so that when that file exists it is used for `chutney-pot` in the home tile and the public card with no other change; when it does not exist, nothing breaks and no red picture appears for the chutney. Do not draw or generate a yellow picture yourself.
 4. `docs/design/image-manifest.md`: correct the `photo-sauce.webp` row (hot sauce, red, tied to `hot-sauce-pot`) and add a `photo-chutney.webp` row marked "owner to supply, turmeric yellow".
 5. Alt text must match what is in the picture; no invented claims about ingredients or spice level.
+
+## Part 3 — Repo address (decision D-070)
+
+The repo moved to `steamspice/steamspice.github.io`. In `backend/supabase/functions/trigger-rebuild/index.ts` change the default of `GITHUB_REPO` from `sarojaryal071-sudo/momo` to `steamspice/steamspice.github.io` and update the comment on line 3. The deployed function already gets the right value from the `GITHUB_REPO` secret, so this is only to keep the code honest. Merging it deploys the backend workflow; confirm the run is green. Search the repo for any other mention of the old address (`sarojaryal071-sudo`) outside the progress tracker history and fix it. Do not change behaviour.
