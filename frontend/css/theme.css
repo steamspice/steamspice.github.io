@@ -60,10 +60,10 @@
 
   /* Type (D-050, D-051; spec: docs/design/type-and-spacing-spec.md). Text people read or tap is fixed; only display headings
      are fluid, always with a hard maximum. Bebas Neue is never below 1.375rem. */
-  --text-body: 1rem;
-  --text-read: 1.0625rem;      /* reading paragraphs and lead text */
-  --text-ui: 0.9375rem;        /* buttons, nav, chips */
-  --text-small: 0.875rem;      /* totals, errors, help, meta, labels: nothing functional is smaller */
+  --text-body: clamp(1.0625rem, 1rem + 0.25vw, 1.125rem);  /* D-074: 17 to 18px, a little larger than before, still fluid with a hard cap */
+  --text-read: clamp(1.125rem, 1.07rem + 0.25vw, 1.1875rem); /* reading paragraphs and lead text: 18 to 19px */
+  --text-ui: 1rem;             /* buttons, nav, chips */
+  --text-small: 0.9375rem;     /* totals, errors, help, meta, labels: secondary text is never smaller than 15px */
   --text-eyebrow: 0.75rem;     /* eyebrows and tags only */
   --text-input: 1rem;          /* stops iPhone zoom on focus */
   --text-name: 1.5rem;         /* product names (Bebas) */
@@ -221,6 +221,9 @@
 /* Admin tokens (D-050 spec section 3): denser than the public site, scoped to the admin root. Same palette and fonts. */
 .admin-body {
   --text-body: 0.9375rem;
+  --text-read: 1.0625rem;      /* the admin keeps its own, denser sizes (D-074 changes the public site only) */
+  --text-ui: 0.9375rem;
+  --text-small: 0.875rem;
   --line-height-body: 1.5;
   --admin-title: 1.5rem;       /* page title, Bebas Neue */
   --admin-heading: 1rem;       /* card headings, Space Grotesk 600 */

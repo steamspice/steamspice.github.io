@@ -1,5 +1,7 @@
 // Done page: the order as a paper receipt, from sessionStorage. Nothing opens automatically (D-036).
 import { shortDateLabel } from './pickup.js';
+import { getOrderingState } from './order-gateway.js';
+import { siteConfig } from './site-config.js';
 import './menu.js';
 import { formatPrice, updateHeaderCount } from './cart.js';
 
@@ -55,7 +57,7 @@ if (order) {
       `Name: ${order.name || '-'}`, `Pickup: ${order.pickup || 'To be agreed'}`, '-'.repeat(w),
       ...order.lines.flatMap((l) => [row(`${l.qty} x ${l.name}`, l.included ? 'Free' : formatPrice(l.linePence)), ...(l.optionText ? [`   Customised: ${l.optionText}`] : []), ...(l.preorderReadyFrom ? [`   Pre-order, ready from ${shortDateLabel(l.preorderReadyFrom)}`] : [])]),
       '-'.repeat(w), row('TOTAL', formatPrice(order.totalPence)), '-'.repeat(w),
-      'Pickup only. Pay cash when you pick up.', 'Not confirmed until we message you.', '',
+      `Pickup only, in ${siteConfig.pickupAreaText}. Pay cash when you pick up.`, 'Not confirmed until we message you.', '',
     ].filter((x, i) => x !== '' || i > 4).join('\n');
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
     const a = document.createElement('a');
@@ -67,3 +69,6 @@ if (order) {
 } else {
   $('[data-done-missing]').hidden = false;
 }
+
+// the pickup area is a setting (D-074): the receipt line shows the current value
+getOrderingState().then(() => document.querySelectorAll('[data-pickup-area]').forEach((n) => { n.textContent = siteConfig.pickupAreaText; })).catch(() => {});

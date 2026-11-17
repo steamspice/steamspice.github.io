@@ -55,7 +55,7 @@ export function fullPickupDates(state, from, to) {
 // Public: what the cart needs to know.
 export function publicState(state) {
   const s = state.settings;
-  return { orderingOpen: s.ordering_open, closedMessage: s.ordering_closed_message, fullDates: fullPickupDates(state), customMinLeadHours: s.custom_min_lead_hours, chutneyTiers: s.included_chutney_tiers || [], customisationFeePence: s.customisation_fee_pence || 0, customisationNote: s.customisation_note || '' };
+  return { orderingOpen: s.ordering_open, closedMessage: s.ordering_closed_message, fullDates: fullPickupDates(state), customMinLeadHours: s.custom_min_lead_hours, chutneyTiers: s.included_chutney_tiers || [], customisationFeePence: s.customisation_fee_pence || 0, customisationNote: s.customisation_note || '', pickupAreaText: s.pickup_area_text || 'Leicester' };
 }
 
 // Orders for the admin list. Orders without a pickup date are always included.
@@ -277,7 +277,7 @@ export function setOrderStatus(state, id, status, now = new Date()) {
 }
 
 // ---------- settings ----------
-const SETTING_LIMITS = { ordering_closed_message: 300, wa_template_confirmed: 1000, wa_template_ready: 1000, wa_template_cancelled: 1000, wa_template_collected: 1000, pickup_address_text: 500 };
+const SETTING_LIMITS = { ordering_closed_message: 300, wa_template_confirmed: 1000, wa_template_ready: 1000, wa_template_cancelled: 1000, wa_template_collected: 1000, pickup_address_text: 500, pickup_area_text: 60 };
 export function saveSettings(state, patch) {
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'ordering_open') state.settings.ordering_open = Boolean(value);

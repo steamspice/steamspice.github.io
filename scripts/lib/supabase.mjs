@@ -54,6 +54,13 @@ export async function fetchProducts({ url, key }) {
   return products;
 }
 
+// A public text setting (for example the pickup area). Returns null when it is not set or cannot be read: the caller keeps its default.
+export async function fetchTextSetting({ url, key, name }) {
+  const res = await get(`${url.replace(/\/+$/, '')}/rest/v1/settings?select=value&key=eq.${encodeURIComponent(name)}`, key);
+  const rows = await res.json();
+  return rows[0] && typeof rows[0].value === 'string' && rows[0].value.trim() ? rows[0].value.trim() : null;
+}
+
 // A photo_path with no file extension is a static image already in the repo (assets/img/<name>.webp); anything else is a file
 // in the product-images bucket: it is downloaded and written as dist/assets/products/<slug>.webp and <slug>-400.webp.
 export async function buildPhotos(products, { url, key, dist, sharp }) {

@@ -1,0 +1,8 @@
+[
+  { "q": "How do I order?", "a": "Choose your packs in the shop, pick a pickup day and time, and send your order. It is not final until we message you to confirm it." },
+  { "q": "Do you deliver?", "a": "No. We do not deliver. Orders are pickup only, in {area}." },
+  { "q": "How do I pay?", "a": "You pay cash when you pick up your order. There is no payment on the website." },
+  { "q": "What comes with my order?", "a": "Each pack has 40 momo, frozen. One free chutney pot comes with every order, and you can add extra pots to your cart." },
+  { "q": "Are they ready to eat?", "a": "Not straight from the bag. They come frozen and are ready to steam at home when you want them. The how to cook page has the steps." },
+  { "q": "Where do I collect?", "a": "In {area}. We send the exact address on WhatsApp once we confirm your order." }
+]

@@ -197,11 +197,13 @@ export function renderRegion(page, products, siteUrl = '') {
   if (page === 'index') {
     const shown = products.filter((p) => p.available).slice(0, HOME_PRODUCT_LIMIT);
     if (!shown.length) return EMPTY;
-    return `<div class="product-wrap">
-<ul class="product-grid">
-${shown.map(card).join('\n')}
+    // the two packs are the main row; an add-on (the chutney pot) is a slim band under them
+    const packs = shown.filter((p) => p.kind !== 'addon'); const extras = shown.filter((p) => p.kind === 'addon');
+    return `<div class="product-wrap product-wrap-home">
+<ul class="product-grid product-grid-packs">
+${packs.map(card).join('\n')}
 </ul>
-</div>`;
+${extras.length ? `<ul class="product-grid product-grid-band">\n${extras.map(card).join('\n')}\n</ul>\n` : ''}</div>`;
   }
   if (!products.length) return EMPTY;
   return `<div class="product-wrap">
@@ -213,6 +215,16 @@ ${products.map(card).join('\n')}
 </div>
 ${productJsonLd(products, siteUrl)}`;
 }
+
+// The questions on the home page (D-074): one text, used for the visible <details> and for the FAQPage structured data.
+// {area} is the pickup area setting (default Leicester); the build replaces the marked span with the current value.
+const faqText = (s, area) => s.replace('{area}', area);
+export function renderFaq(items, area = 'Leicester') {
+  const html = items.map((i) => `<details class="faq-item"><summary>${esc(i.q)}</summary><p>${esc(faqText(i.a, '\u0000')).replace('\u0000', `<span data-pickup-area>${esc(area)}</span>`)}</p></details>`).join('\n');
+  const ld = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: items.map((i) => ({ '@type': 'Question', name: i.q, acceptedAnswer: { '@type': 'Answer', text: faqText(i.a, area) } })) };
+  return `<div class="faq-list">\n${html}\n</div>\n<script type="application/ld+json">${JSON.stringify(ld)}</script>`;
+}
+export const FAQ_RE = /(<!-- build:faq -->)[\s\S]*?(<!-- \/build:faq -->)/;
 
 export const REGION_RE = /(<!-- build:products -->)[\s\S]*?(<!-- \/build:products -->)/;
 export const fillRegion = (html, inner) => html.replace(REGION_RE, (_, a, b) => `${a}\n${inner}\n${b}`);

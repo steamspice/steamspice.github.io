@@ -27,6 +27,7 @@ export const siteConfig = {
   customMinLeadHours: CUSTOM_MIN_LEAD_HOURS,
   customisationFeePence: 0, // her flat fee for a customised item (D-073); read from the settings when a page loads
   customisationNote: '',
+  pickupAreaText: 'Leicester', // the pickup area setting (D-074); pages are built with it and the receipt reads it
   homeProductLimit: HOME_PRODUCT_LIMIT,
   searchMinProducts: SEARCH_MIN_PRODUCTS,
   kindLabels: KIND_LABELS,

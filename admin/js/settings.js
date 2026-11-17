@@ -96,9 +96,10 @@ function buildOrdering() {
 }
 
 function buildPickup() {
+  const area = field('Pickup area', 'text', { value: settings.pickup_area_text ?? 'Leicester', maxLength: 60, hint: 'The town or area named on the site, in the questions and on the receipt, for example Leicester. The site shows it after the next publish.' });
   const address = field('Address and how to find you', 'textarea', { value: settings.pickup_address_text ?? '', rows: 4, maxLength: 500 });
-  return { nodes: [card('Pickup address (private)', el('p', {}, 'Only used in the messages you send to customers. It is never shown on the public site.'), address.wrap)],
-    values: () => ({ a: address.control.value }), save: () => api.saveSettings({ pickup_address_text: address.control.value }) };
+  return { nodes: [card('Pickup area', el('p', {}, 'Shown on the public site.'), area.wrap), card('Pickup address (private)', el('p', {}, 'Only used in the messages you send to customers. It is never shown on the public site.'), address.wrap)],
+    values: () => ({ a: address.control.value, area: area.control.value }), save: () => api.saveSettings({ pickup_address_text: address.control.value, pickup_area_text: area.control.value.trim() || 'Leicester' }) };
 }
 
 function buildMessages() {

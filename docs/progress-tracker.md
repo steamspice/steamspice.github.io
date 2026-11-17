@@ -2,7 +2,7 @@
 
 The coding agent updates this file at the end of every phase (see `docs/usage-rules.md` section 7). Trust it instead of re-exploring the repository. Edit only the lines that changed.
 
-- Last updated: 2026-11-17 (Step 5, coding agent)
+- Last updated: 2026-11-17 (Step 4t, coding agent)
 - Current step: **Step 4d built and merged. Waiting for the owner: backend setup (`backend/README.md` section 3) and the live checks**
 - Next action: owner finishes `backend/README.md` and tests the admin on the live site; then Step 4f (admin visual style from the approved reference and Products redesign, D-061), then Step 4g (editable allergens and ingredients, Save bar fix, D-062), then Step 4h (weekly pickup hours redesign, D-063), then Step 4i (admin sales summary, D-064), then Step 4j (Realtime connection fix), then Step 4n (admin fixes round: product editor back to one page, Settings hub look and back path, notice-period modal, red allergen navigation, order More menu, Publish wording; 4m is folded into it), Step 4o (blurred colour patches on the public site, D-067), Step 4p (new logo everywhere D-068, sauce pictures D-069, repo address default D-070), Step 4q (messaging fallback, same-day pickup, stock labels, pre-orders, D-071), Step 4r (free chutney with every order, hot sauce removed, D-072), Step 4s (ingredient pills, one customisation fee, change password, D-073; run before 4l), Step 4t (richer home and Our story, D-074; after 4s), Step 4l (catalogue: categories, reusable options, allergens by product, D-065), then Step 5 (SEO, hardening, launch).
 
@@ -238,6 +238,14 @@ Legend: `[ ]` not done, `[x]` done. For every ticked item add: commit hash, one-
 - [x] Products: card list (thumbnail, name, price, Active toggle, stock chip, Edit, quiet reorder), Unpublished changes / Publish banner, full-screen Edit with glass bar, section cards, groups as chips, 14 allergens in a grid, stock tracking switch, availability, one sticky Save and Cancel, unsaved-changes dialog, toast on save
 - [x] Orders cards per the reference (Confirm and More on one row; Message customer moved into More); Home, Prep, Pickup, Settings use the kit through shared CSS
 - [ ] Owner checks: press feel, toggles, glass bars over cards, patches on all pages, a real product save, the publish banner
+
+## Step 4t — Richer home page and Our story (D-074)
+
+- [x] Home: fuller hero copy, five-item trust row, packs as the main row with the chutney as a slim band, "What comes in the pack", short story with a link, statement band, numbered ordering flow, six-question FAQ (`frontend/content/faq.json`, built into `<details>` and FAQPage JSON-LD).
+- [x] `about` page (Our story), linked from the header menu and footer; in the sitemap.
+- [x] Type: body 17 to 18px, reading text 18 to 19px, secondary text at least 15px (public site only); scroll reveal no longer changes opacity, so no section can be invisible.
+- [x] Setting `pickup_area_text` (default Leicester, migration 0016, edited in Settings, Pickup details); pages are built with it (`<span data-pickup-area>`), the receipt reads it.
+- Hidden, not shown: fillings, steam time, storage, allergens, real photos. The kitchen-corner picture is gone from the home page (it is an AI image); it is still on the how-to-cook page.
 
 ## Step 5 — SEO, hardening and launch checks
 
@@ -486,3 +494,5 @@ Legend: `[ ]` not done, `[x]` done. For every ticked item add: commit hash, one-
 - 2026-11-17, step 4s (demo backend only): build passes; database tests pass (fee once per customised line for quantity 3 with two changes, two products each pay once, fee 0, non-removable and foreign ingredients refused, tampered fee ignored, snapshots survive rename and delete, RLS); mock-backend, admin-rules, functions, regions, build-supabase tests pass; Playwright at 390 px: pills, fee line, cart, receipt, admin order card, ingredient library, account errors. Not checked: real Supabase and the real password change.
 
 - 2026-11-17, step 5: build passes; audit clean; axe clean; Lighthouse mobile run on a local copy of dist (SEO score is lower only because the site is noindex until launch); indexable scratch build fails on `data-pending` as designed. Not checked: Google's Rich Results Test and live pages (unreachable from the sandbox).
+
+- 2026-11-17, step 4t: build passes; regions test (incl. FAQ) passes; database tests pass; axe clean on home and about at 390 and 1440 px (reduced motion); full-page scroll captures at both widths show every section; JavaScript off still shows all sections and the FAQ. Not checked: the setting against real Supabase, and Search Console.

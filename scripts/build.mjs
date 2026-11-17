@@ -3,9 +3,9 @@ import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fillRegion, merge, renderRegion } from './lib/render.mjs';
+import { FAQ_RE, fillRegion, merge, renderFaq, renderRegion } from './lib/render.mjs';
 import { hasPlaceholderData, launchBlockers } from './lib/validate.mjs';
-import { buildPhotos, fetchProducts } from './lib/supabase.mjs';
+import { buildPhotos, fetchProducts, fetchTextSetting } from './lib/supabase.mjs';
 import { siteConfig } from '../frontend/js/site-config.js';
 
 const root = resolve(fileURLToPath(import.meta.url), '..', '..');
@@ -78,6 +78,12 @@ if (useSeed) {
   products = merge(rows, content);
 }
 
+// The pickup area (D-074): a public setting with the default "Leicester". Every <span data-pickup-area> on a public page is filled with it.
+let pickupArea = 'Leicester';
+if (backend === 'supabase') pickupArea = (await fetchTextSetting({ url: supabaseUrl, key: supabaseKey, name: 'pickup_area_text' }).catch(() => null)) || pickupArea;
+const faqItems = JSON.parse(await readFile(join(root, 'frontend/content/faq.json'), 'utf8'));
+const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 // Chutney picture (D-069): the turmeric-yellow chutney has no picture yet. The moment the owner adds frontend/assets/img/photo-chutney.webp it is
 // used for the chutney pot (card and dialog) and in the home Sauces tile; until then nothing red or invented stands in for it.
 const chutneyFile = join(root, 'frontend/assets/img/photo-chutney.webp');
@@ -126,6 +132,8 @@ for (const file of htmlFiles) {
     // Instagram line: a real link once the constant is set, otherwise the line stays empty and hidden (D-052).
     const ig = siteConfig.socialLinks.instagram;
     if (ig) html = html.replace(INSTAGRAM_RE, `<!-- build:instagram --><a class="contact-item" href="${escAttr(ig)}" rel="noopener">${INSTAGRAM_GLYPH}Instagram</a><!-- /build:instagram -->`);
+    if (rel === 'index.html') html = html.replace(FAQ_RE, (_, a, b) => `${a}\n${renderFaq(faqItems, pickupArea)}\n${b}`);
+    html = html.replace(/(<span data-pickup-area>)[^<]*(<\/span>)/g, (_, a, b) => `${a}${escHtml(pickupArea)}${b}`);
     if (rel === 'index.html') html = html.replace(/<!-- build:chutney-photo -->[\s\S]*?<!-- \/build:chutney-photo -->/, `<!-- build:chutney-photo -->${hasChutney ? CHUTNEY_FIGURE : CHUTNEY_ART}<!-- /build:chutney-photo -->`);
     if (products.length) html = fillRegion(html, renderRegion(page === 'index' ? 'index' : 'shop', products, siteUrl));
     // SEO region: canonical, og:url, og:image, and Organization data on the home page.
@@ -142,6 +150,7 @@ for (const file of htmlFiles) {
     const pageTitle = (html.match(/<title>([\s\S]*?)<\/title>/i) || [])[1]; const pageDesc = (html.match(/<meta name="description" content="([^"]*)"/i) || [])[1];
     if (pageTitle) seo.push(`<meta name="twitter:title" content="${pageTitle}">`);
     if (pageDesc) seo.push(`<meta name="twitter:description" content="${pageDesc}">`);
+    if (rel === 'about.html') seo.push(`<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'AboutPage', name: 'Our story', url: urlFor(rel), about: { '@type': 'Organization', name: ORG.name, url: `${siteUrl}/` } })}</script>`);
     if (rel === 'index.html') {
       seo.push(`<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'Organization', name: ORG.name, url: `${siteUrl}/`, logo: `${siteUrl}/assets/img/logo-full-960.webp`, telephone: ORG.telephone })}</script>`);
     }

@@ -53,12 +53,12 @@ const supabaseGateway = {
     throw new Error(`place-order: ${res.status}`);
   },
   async state(config) {
-    const open = { customisationFeePence: 0, customisationNote: '', orderingOpen: true, closedMessage: '', fullDates: [], customMinLeadHours: config.customMinLeadHours, chutneyTiers: [] };
+    const open = { customisationFeePence: 0, customisationNote: '', orderingOpen: true, closedMessage: '', fullDates: [], customMinLeadHours: config.customMinLeadHours, chutneyTiers: [], pickupAreaText: 'Leicester' };
     try {
-      const keys = 'ordering_open,ordering_closed_message,custom_min_lead_hours,included_chutney_tiers,customisation_fee_pence,customisation_note';
+      const keys = 'ordering_open,ordering_closed_message,custom_min_lead_hours,included_chutney_tiers,customisation_fee_pence,customisation_note,pickup_area_text';
       const [rows, full] = await Promise.all([restGet(`settings?select=key,value&key=in.(${keys})`, config), rpc('full_pickup_dates', {}, config).catch(() => [])]);
       const s = settingsMap(rows);
-      return { customisationFeePence: Number.isInteger(s.customisation_fee_pence) ? s.customisation_fee_pence : 0, customisationNote: typeof s.customisation_note === 'string' ? s.customisation_note : '', orderingOpen: s.ordering_open !== false, closedMessage: s.ordering_closed_message || '', fullDates: Array.isArray(full) ? full : [], customMinLeadHours: Number(s.custom_min_lead_hours) || config.customMinLeadHours, chutneyTiers: Array.isArray(s.included_chutney_tiers) ? s.included_chutney_tiers : [] };
+      return { customisationFeePence: Number.isInteger(s.customisation_fee_pence) ? s.customisation_fee_pence : 0, customisationNote: typeof s.customisation_note === 'string' ? s.customisation_note : '', pickupAreaText: typeof s.pickup_area_text === 'string' && s.pickup_area_text.trim() ? s.pickup_area_text.trim() : 'Leicester', orderingOpen: s.ordering_open !== false, closedMessage: s.ordering_closed_message || '', fullDates: Array.isArray(full) ? full : [], customMinLeadHours: Number(s.custom_min_lead_hours) || config.customMinLeadHours, chutneyTiers: Array.isArray(s.included_chutney_tiers) ? s.included_chutney_tiers : [] };
     } catch { return open; } // if the settings cannot be read the cart stays usable; the function still enforces every rule
   },
 };
@@ -79,5 +79,6 @@ export async function getOrderingState(config = siteConfig) {
   // the customisation fee and her wording are settings, never hard-coded: the carts and the shop read them from here
   config.customisationFeePence = state.customisationFeePence || 0;
   config.customisationNote = state.customisationNote || '';
+  config.pickupAreaText = state.pickupAreaText || 'Leicester';
   return state;
 }

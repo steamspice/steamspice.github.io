@@ -22,3 +22,18 @@ for (const [page, file] of [['index', 'index.html'], ['shop', 'shop.html']]) {
     assert.equal(fillRegion(html, renderRegion(page, products)), html);
   });
 }
+
+// Step 4t: the home FAQ is one text for the visible questions and the FAQPage data, and the page holds it as real HTML
+import { renderFaq } from '../scripts/lib/render.mjs';
+test('the FAQ renders as details elements and matching FAQPage JSON-LD, with the pickup area filled in', async () => {
+  const faq = JSON.parse(await read('frontend/content/faq.json'));
+  assert.equal(faq.length, 6);
+  const out = renderFaq(faq, 'Leicester');
+  assert.equal((out.match(/<details class="faq-item">/g) || []).length, 6);
+  const ld = JSON.parse(out.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+  assert.equal(ld['@type'], 'FAQPage'); assert.equal(ld.mainEntity.length, 6);
+  assert.match(ld.mainEntity[5].acceptedAnswer.text, /^In Leicester\. We send the exact address on WhatsApp/);
+  assert.match(out, /<span data-pickup-area>Leicester<\/span>/);
+  const home = await read('frontend/index.html');
+  assert.ok(home.includes(out), 'frontend/index.html carries the same FAQ as the build');
+});
