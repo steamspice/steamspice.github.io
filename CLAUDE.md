@@ -60,6 +60,6 @@ Keep the report under about 40 lines. No recap of earlier steps, no pasted file 
 
 ## Facts you may use
 
-- Products: frozen chicken momo and frozen veg momo, 40 pieces each, £10 each. Sauce pots (chutney, hot sauce) are add-ons with prices still to be confirmed.
+- Products: frozen chicken momo and frozen veg momo, 40 pieces each, £10 each. One chutney pot comes free with every order (pot size grows with the order; the size rule is not known yet). Extra chutney pots are a paid add-on, price still to be confirmed. There is no hot sauce (decision D-072).
 - Tagline: "Taste like Nepal". Public phone: +44 7413 069241 (confirm it is also her WhatsApp number).
 - Audience: Nepalis in the UK who miss the taste of home, and curious people who want a taste of the Himalayas.
