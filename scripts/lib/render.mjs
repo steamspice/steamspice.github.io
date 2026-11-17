@@ -31,7 +31,7 @@ function productJsonLd(products, siteUrl) {
 }
 
 const PACK_ALT = 'A bag of frozen momo tied with twine and a blank paper tag';
-const MEDIA_SIZES = '(min-width: 40em) 22rem, 90vw';
+const MEDIA_SIZES = '(min-width: 40em) 16rem, 28vw'; // the card picture is about 16rem wide on a wide screen and about a quarter of the screen on a phone
 const kindLabel = (kind) => KIND_LABELS[kind] || kind.charAt(0).toUpperCase() + kind.slice(1);
 
 // Image tile: the product photo, or a quiet drawn placeholder until a photo exists.
@@ -205,7 +205,8 @@ ${shown.map(card).join('\n')}
   }
   if (!products.length) return EMPTY;
   return `<div class="product-wrap">
-${toolsHtml(products)}<ul class="product-grid" data-product-grid>
+${toolsHtml(products)}<h2 class="visually-hidden">Our products</h2>
+<ul class="product-grid" data-product-grid>
 ${products.map(card).join('\n')}
 </ul>
 <p class="empty-note" data-no-results hidden>No products match. Try another word or filter.</p>

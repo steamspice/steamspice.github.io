@@ -31,7 +31,8 @@ const ORG = { name: 'Steam & Spice', telephone: '+44 7413 069241' };
 const TITLE_RANGE = [30, 65];
 const DESCRIPTION_RANGE = [120, 165];
 // Pages that are never indexed, whatever SITE_INDEXABLE says (SEO rulebook section 5).
-const alwaysNoindex = new Set(['cart.html', 'done.html']);
+// cart and receipt are never indexed; privacy and terms stay out of the index and out of the footer until the owner approves their wording
+const alwaysNoindex = new Set(['cart.html', 'done.html', 'privacy.html', 'terms.html']);
 
 async function walk(dir) {
   const out = [];
@@ -132,8 +133,15 @@ for (const file of htmlFiles) {
       `<link rel="canonical" href="${urlFor(rel)}">`,
       `<meta property="og:url" content="${urlFor(rel)}">`,
       `<meta property="og:image" content="${siteUrl}/${OG_IMAGE}">`,
+      `<meta property="og:image:width" content="1200">`,
+      `<meta property="og:image:height" content="630">`,
+      `<meta property="og:image:alt" content="${escAttr(`${ORG.name}. Taste like Nepal.`)}">`,
       `<meta name="twitter:image" content="${siteUrl}/${OG_IMAGE}">`,
     ];
+    // twitter title and description repeat the page's own, so a share card never shows a blank
+    const pageTitle = (html.match(/<title>([\s\S]*?)<\/title>/i) || [])[1]; const pageDesc = (html.match(/<meta name="description" content="([^"]*)"/i) || [])[1];
+    if (pageTitle) seo.push(`<meta name="twitter:title" content="${pageTitle}">`);
+    if (pageDesc) seo.push(`<meta name="twitter:description" content="${pageDesc}">`);
     if (rel === 'index.html') {
       seo.push(`<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'Organization', name: ORG.name, url: `${siteUrl}/`, logo: `${siteUrl}/assets/img/logo-full-960.webp`, telephone: ORG.telephone })}</script>`);
     }
